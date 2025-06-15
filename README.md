@@ -1,114 +1,139 @@
-# Valkyrie - Kubernetes Anomaly Detection Agent
+# Valkyrie
 
-Valkyrie is a learning agent that monitors Kubernetes clusters for anomalies and provides intelligent insights into cluster health and performance.
+Valkyrie is an intelligent Kubernetes monitoring agent that uses reinforcement learning to detect and respond to anomalies in your cluster.
 
 ## Features
 
-- Real-time cluster state monitoring
-- Statistical anomaly detection
-- Event correlation and enrichment
-- Vector-based alert storage with Qdrant or Redis
-- Multiple notification channels (Alertmanager, Slack, Email, Webhook)
-- Learning capabilities for adaptive thresholds
-
-## Project Structure
-
-```
-.
-├── main.go                 # Main entry point
-├── pkg/
-│   ├── agent/             # Core agent implementation
-│   │   └── agent.go
-│   ├── anomaly/           # Anomaly detection logic
-│   │   └── detector.go
-│   ├── embedding/         # Text embedding models
-│   │   └── model.go
-│   ├── notification/      # Notification system
-│   │   ├── types.go
-│   │   └── notifiers.go
-│   ├── storage/          # Vector storage implementations
-│   │   ├── storage.go    # Storage interface
-│   │   ├── factory.go    # Storage factory
-│   │   ├── qdrant.go     # Qdrant implementation
-│   │   └── redis.go      # Redis implementation
-│   └── types/            # Common types
-│       └── types.go
-└── scripts/              # Utility scripts
-```
-
-## Setup
-
-1. Install dependencies:
-   ```bash
-   go mod download
-   ```
-
-2. Configure Kubernetes access:
-   - Set `KUBECONFIG` environment variable or use default `~/.kube/config`
-
-3. Configure storage backend:
-   - Set `STORAGE_TYPE` to either "qdrant" or "redis" (default: "qdrant")
-   
-   For Qdrant:
-   - Set `QDRANT_URL` (default: http://localhost:6333)
-   - Run the setup script: `./scripts/setup_qdrant.sh`
-   
-   For Redis:
-   - Set `REDIS_URL` (default: localhost:6379)
-   - Set `REDIS_PASSWORD` (optional)
-   - Set `REDIS_DB` (default: 0)
-
-4. Configure notification channels (optional):
-   - Alertmanager: Set `ALERTMANAGER_URL` environment variable
-   - Slack: Set `SLACK_WEBHOOK_URL` and `SLACK_CHANNEL`
-   - Email: Configure SMTP settings
-   - Webhook: Set `WEBHOOK_ENDPOINT`
-
-5. Run the agent:
-   ```bash
-   go run main.go
-   ```
+- **Anomaly Detection**: Detects anomalies in CPU usage, memory usage, pod restarts, and pod status
+- **Vector Storage**: Stores and searches similar anomalies using vector embeddings
+- **Multiple Storage Backends**: Supports both Qdrant and Redis for vector storage
+- **Embedding Models**: Supports multiple embedding models (Simple, OpenAI, Sentence Transformers)
+- **Notification System**: Supports multiple notification channels (Slack, Email, Webhook, Alertmanager)
+- **Configurable Thresholds**: Customize detection thresholds and history size
+- **Kubernetes Integration**: Monitors pods, deployments, services, and nodes
 
 ## Configuration
 
-The agent can be configured through environment variables:
+Valkyrie is configured using a YAML file. Here's an example configuration:
 
-- `KUBECONFIG`: Path to kubeconfig file
-- `STORAGE_TYPE`: Storage backend type (qdrant, redis)
-- `QDRANT_URL`: Qdrant endpoint (default: http://localhost:6333)
-- `REDIS_URL`: Redis endpoint (default: localhost:6379)
-- `REDIS_PASSWORD`: Redis password (optional)
-- `REDIS_DB`: Redis database number (default: 0)
-- `ALERTMANAGER_URL`: Alertmanager endpoint (default: http://localhost:9093)
-- `NOTIFICATION_TYPE`: Type of notification (alertmanager, slack, email, webhook)
-- `MIN_SEVERITY`: Minimum severity for notifications (Low, Medium, High)
+```yaml
+# Kubernetes configuration
+kubernetes:
+  kubeconfig: ~/.kube/config
+  context: ""
+  namespace: ""
+  resources:
+    - pods
+    - deployments
+    - services
+    - nodes
+
+# Storage configuration
+storage:
+  type: qdrant  # or redis
+  qdrant:
+    url: http://localhost:6333
+    collection: alerts
+    vectorSize: 384
+    distanceMetric: cosine
+  redis:
+    url: localhost:6379
+    password: ""
+    db: 0
+    keyPrefix: "valkyrie:"
+
+# Notification configuration
+notification:
+  enabled: true
+  type: alertmanager  # or slack, email, webhook
+  minSeverity: warning
+  slack:
+    webhookUrl: ""
+    channel: "#alerts"
+    username: "Valkyrie"
+  email:
+    smtpHost: ""
+    smtpPort: 587
+    smtpUser: ""
+    smtpPassword: ""
+    from: ""
+    to: []
+  webhook:
+    url: ""
+    method: POST
+    headers: {}
+  alertmanager:
+    url: http://localhost:9093
+    labels:
+      app: valkyrie
+      severity: warning
+
+# Anomaly detection configuration
+anomalyDetection:
+  cpuThreshold: 80.0
+  memoryThreshold: 80.0
+  podRestartThreshold: 3
+  maxHistorySize: 1000
+
+# Embedding configuration
+embedding:
+  type: simple  # or openai, sentence-transformers
+  dimension: 384
+  openai:
+    apiKey: ""
+    model: text-embedding-ada-002
+  sentenceTransformers:
+    model: all-MiniLM-L6-v2
+    device: cpu
+```
+
+## Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/rodgon/valkyrie.git
+cd valkyrie
+```
+
+2. Install dependencies:
+```bash
+go mod download
+```
+
+3. Build the binary:
+```bash
+go build -o valkyrie
+```
+
+## Usage
+
+1. Create a configuration file (e.g., `config.yaml`) with your settings.
+
+2. Run Valkyrie:
+```bash
+./valkyrie -config config.yaml
+```
 
 ## Development
 
-1. Install development tools:
-   ```bash
-   go install golang.org/x/tools/cmd/goimports@latest
-   go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-   ```
+### Prerequisites
 
-2. Run tests:
-   ```bash
-   go test ./...
-   ```
+- Go 1.21 or later
+- Kubernetes cluster (or minikube for local development)
+- Qdrant or Redis for vector storage
 
-3. Run linter:
-   ```bash
-   golangci-lint run
-   ```
+### Building
 
-## Contributing
+```bash
+go build -o valkyrie
+```
 
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+### Testing
+
+```bash
+go test ./...
+```
 
 ## License
 
-MIT License
+MIT License - see LICENSE file for details
