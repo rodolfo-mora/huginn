@@ -31,7 +31,8 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/valkyrie .
 
-# Copy setup script
+# Copy configuration and scripts
+COPY config.yaml /app/config.yaml
 COPY scripts/setup_qdrant.sh /app/scripts/
 RUN chmod +x /app/scripts/setup_qdrant.sh
 

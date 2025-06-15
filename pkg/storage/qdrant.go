@@ -13,22 +13,22 @@ import (
 
 // QdrantClient implements the Storage interface using Qdrant
 type QdrantClient struct {
-	URL        string
-	Client     *http.Client
-	Collection string
+	url        string
+	collection string
+	client     *http.Client
 }
 
 // NewQdrantClient creates a new Qdrant client
-func NewQdrantClient(url, collection string) *QdrantClient {
+func NewQdrantClient(url, collection string) (*QdrantClient, error) {
 	return &QdrantClient{
-		URL:        url,
-		Client:     &http.Client{},
-		Collection: collection,
-	}
+		url:        url,
+		collection: collection,
+		client:     &http.Client{Timeout: 10 * time.Second},
+	}, nil
 }
 
-// StoreAlert implements the Storage interface
-func (q *QdrantClient) StoreAlert(anomaly types.Anomaly, events []types.Event, vector []float32) error {
+// StoreAlert stores an alert in Qdrant
+func (c *QdrantClient) StoreAlert(vector []float32, anomaly types.Anomaly) error {
 	// Create alert vector
 	alertVector := AlertVector{
 		ID:        fmt.Sprintf("%s-%s-%d", anomaly.Type, anomaly.Resource, time.Now().UnixNano()),
@@ -42,94 +42,111 @@ func (q *QdrantClient) StoreAlert(anomaly types.Anomaly, events []types.Event, v
 			Description: anomaly.Description,
 			Value:       anomaly.Value,
 			Threshold:   anomaly.Threshold,
-			Labels:      make(map[string]string),
-			Events:      events,
-			Metadata: map[string]interface{}{
-				"detection_time": anomaly.Timestamp,
-				"source":         "k8s-agent",
-			},
+			Labels:      anomaly.Labels,
+			Events:      anomaly.Events,
+			Metadata:    anomaly.Metadata,
 		},
 	}
 
 	// Marshal to JSON
 	data, err := json.Marshal(alertVector)
 	if err != nil {
-		return fmt.Errorf("error marshaling alert vector: %v", err)
+		return fmt.Errorf("failed to marshal alert vector: %v", err)
 	}
 
-	// Create point in Qdrant
-	url := fmt.Sprintf("%s/collections/%s/points", q.URL, q.Collection)
-	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(data))
+	// Send to Qdrant
+	url := fmt.Sprintf("%s/collections/%s/points", c.url, c.collection)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
-		return fmt.Errorf("error creating request: %v", err)
+		return fmt.Errorf("failed to create request: %v", err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := q.Client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("error storing alert in Qdrant: %v", err)
+		return fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("error response from Qdrant: %s - %s", resp.Status, string(body))
+		return fmt.Errorf("Qdrant API returned non-200 status code: %d", resp.StatusCode)
 	}
 
 	return nil
 }
 
-// SearchSimilarAlerts implements the Storage interface
-func (q *QdrantClient) SearchSimilarAlerts(vector []float32, limit int) ([]AlertVector, error) {
+// SearchSimilarAlerts searches for similar alerts in Qdrant
+func (c *QdrantClient) SearchSimilarAlerts(vector []float32, limit int) ([]types.Anomaly, error) {
 	// Create search payload
-	searchPayload := map[string]interface{}{
+	payload := map[string]interface{}{
 		"vector": vector,
 		"limit":  limit,
 	}
 
-	data, err := json.Marshal(searchPayload)
+	// Marshal to JSON
+	data, err := json.Marshal(payload)
 	if err != nil {
-		return nil, fmt.Errorf("error marshaling search payload: %v", err)
+		return nil, fmt.Errorf("failed to marshal search payload: %v", err)
 	}
 
-	// Search in Qdrant
-	url := fmt.Sprintf("%s/collections/%s/points/search", q.URL, q.Collection)
+	// Send to Qdrant
+	url := fmt.Sprintf("%s/collections/%s/search", c.url, c.collection)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
+		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := q.Client.Do(req)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error searching alerts in Qdrant: %v", err)
+		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("error response from Qdrant: %s - %s", resp.Status, string(body))
+		return nil, fmt.Errorf("Qdrant API returned non-200 status code: %d", resp.StatusCode)
 	}
 
+	// Decode response
 	var result struct {
-		Result []AlertVector `json:"result"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("error decoding search response: %v", err)
+		Results []struct {
+			Payload AlertVectorPayload `json:"payload"`
+		} `json:"results"`
 	}
 
-	return result.Result, nil
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %v", err)
+	}
+
+	// Convert to anomalies
+	anomalies := make([]types.Anomaly, len(result.Results))
+	for i, r := range result.Results {
+		anomalies[i] = types.Anomaly{
+			Type:        r.Payload.Type,
+			Resource:    r.Payload.Resource,
+			Namespace:   r.Payload.Namespace,
+			Severity:    r.Payload.Severity,
+			Description: r.Payload.Description,
+			Value:       r.Payload.Value,
+			Threshold:   r.Payload.Threshold,
+			Labels:      r.Payload.Labels,
+			Events:      r.Payload.Events,
+			Metadata:    r.Payload.Metadata,
+		}
+	}
+
+	return anomalies, nil
 }
 
 // GetAlert implements the Storage interface
 func (q *QdrantClient) GetAlert(id string) (*AlertVector, error) {
-	url := fmt.Sprintf("%s/collections/%s/points/%s", q.URL, q.Collection, id)
+	url := fmt.Sprintf("%s/collections/%s/points/%s", q.url, q.collection, id)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
 
-	resp, err := q.Client.Do(req)
+	resp, err := q.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error getting alert from Qdrant: %v", err)
 	}
@@ -190,14 +207,14 @@ func (q *QdrantClient) ListAlerts(namespace, severity string, startTime, endTime
 		return nil, fmt.Errorf("error marshaling scroll payload: %v", err)
 	}
 
-	url := fmt.Sprintf("%s/collections/%s/points/scroll", q.URL, q.Collection)
+	url := fmt.Sprintf("%s/collections/%s/points/scroll", q.url, q.collection)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		return nil, fmt.Errorf("error creating request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := q.Client.Do(req)
+	resp, err := q.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error listing alerts from Qdrant: %v", err)
 	}
@@ -220,13 +237,13 @@ func (q *QdrantClient) ListAlerts(namespace, severity string, startTime, endTime
 
 // DeleteAlert implements the Storage interface
 func (q *QdrantClient) DeleteAlert(id string) error {
-	url := fmt.Sprintf("%s/collections/%s/points/%s", q.URL, q.Collection, id)
+	url := fmt.Sprintf("%s/collections/%s/points/%s", q.url, q.collection, id)
 	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("error creating request: %v", err)
 	}
 
-	resp, err := q.Client.Do(req)
+	resp, err := q.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error deleting alert from Qdrant: %v", err)
 	}

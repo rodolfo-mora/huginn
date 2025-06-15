@@ -4,63 +4,60 @@ import (
 	"time"
 )
 
-// ClusterState represents the current state of the cluster
+// ClusterState represents the current state of the Kubernetes cluster
 type ClusterState struct {
-	Timestamp    time.Time
-	Namespaces   []string
-	Nodes        []NodeState
-	Resources    map[string]ResourceState
-	Observations []Observation
+	Namespaces []string
+	Nodes      []Node
+	Resources  map[string]ResourceList
 }
 
-// NodeState represents the state of a single node
-type NodeState struct {
-	Name            string
-	CPUUsage        string
-	MemoryUsage     string
-	CPUCapacity     string
-	MemoryCapacity  string
-	Status          string
-	ContainerCount  int
-	LastObservation time.Time
+// Node represents a Kubernetes node
+type Node struct {
+	Name        string
+	CPUUsage    string
+	MemoryUsage string
+	Status      string
 }
 
-// ResourceState represents the state of resources in a namespace
-type ResourceState struct {
-	Pods        []PodState
-	Services    []ServiceState
-	Deployments []DeploymentState
+// ResourceList represents a list of resources in a namespace
+type ResourceList struct {
+	Pods        []Pod
+	Services    []Service
+	Deployments []Deployment
 }
 
-// PodState represents the state of a pod
-type PodState struct {
+// Pod represents a Kubernetes pod
+type Pod struct {
 	Name         string
 	Status       string
-	Namespace    string
-	Age          time.Duration
 	RestartCount int32
 }
 
-// ServiceState represents the state of a service
-type ServiceState struct {
-	Name      string
-	Type      string
-	Namespace string
+// Service represents a Kubernetes service
+type Service struct {
+	Name string
+	Type string
 }
 
-// DeploymentState represents the state of a deployment
-type DeploymentState struct {
-	Name      string
-	Replicas  int32
-	Namespace string
+// Deployment represents a Kubernetes deployment
+type Deployment struct {
+	Name     string
+	Replicas int32
 }
 
-// Observation represents a learning observation
-type Observation struct {
-	Timestamp time.Time
-	Action    string
-	State     ClusterState
-	Reward    float64
+// Anomaly represents a detected anomaly in the cluster
+type Anomaly struct {
+	Type        string
+	Resource    string
+	Namespace   string
+	Severity    string
+	Description string
+	Value       float64
+	Threshold   float64
+	Timestamp   time.Time
+	Labels      map[string]string
+	Events      []Event
+	Metadata    map[string]interface{}
 }
 
 // Event represents a Kubernetes event
@@ -69,34 +66,25 @@ type Event struct {
 	Reason    string
 	Message   string
 	Timestamp time.Time
-	Object    string
-	Namespace string
 }
 
-// Anomaly represents a detected anomaly
-type Anomaly struct {
-	Type        string
-	Resource    string
-	Namespace   string
-	Severity    string
-	Description string
-	Timestamp   time.Time
-	Value       float64
-	Threshold   float64
+// Observation represents a historical observation of the cluster state
+type Observation struct {
+	Timestamp time.Time
+	State     ClusterState
+	Reward    float64
 }
 
-// AnomalyHistory represents the history of anomalies
-type AnomalyHistory struct {
-	Anomalies []Anomaly
-	Events    []Event
-	LastSave  time.Time
+// AlertmanagerAlert represents an alert sent to Alertmanager
+type AlertmanagerAlert struct {
+	Labels       map[string]string `json:"labels"`
+	Annotations  map[string]string `json:"annotations"`
+	StartsAt     time.Time         `json:"startsAt"`
+	EndsAt       time.Time         `json:"endsAt"`
+	GeneratorURL string            `json:"generatorURL"`
 }
 
-// Threshold represents statistical thresholds for anomaly detection
-type Threshold struct {
-	Mean       float64
-	StdDev     float64
-	Min        float64
-	Max        float64
-	LastUpdate time.Time
+// AlertmanagerPayload represents the payload sent to Alertmanager
+type AlertmanagerPayload struct {
+	Alerts []AlertmanagerAlert `json:"alerts"`
 }

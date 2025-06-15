@@ -6,25 +6,16 @@ import (
 	"github.com/rodgon/valkyrie/pkg/types"
 )
 
-// Storage defines the interface for alert storage implementations
+// Storage defines the interface for alert storage
 type Storage interface {
-	// StoreAlert stores an alert with its associated events and vector embedding
-	StoreAlert(anomaly types.Anomaly, events []types.Event, vector []float32) error
+	// StoreAlert stores an alert with its vector embedding
+	StoreAlert(vector []float32, anomaly types.Anomaly) error
 
 	// SearchSimilarAlerts searches for similar alerts using vector similarity
-	SearchSimilarAlerts(vector []float32, limit int) ([]AlertVector, error)
-
-	// GetAlert retrieves an alert by its ID
-	GetAlert(id string) (*AlertVector, error)
-
-	// ListAlerts retrieves alerts with optional filtering
-	ListAlerts(namespace, severity string, startTime, endTime time.Time) ([]AlertVector, error)
-
-	// DeleteAlert deletes an alert by its ID
-	DeleteAlert(id string) error
+	SearchSimilarAlerts(vector []float32, limit int) ([]types.Anomaly, error)
 }
 
-// AlertVector represents an alert stored in any storage backend
+// AlertVector represents an alert stored in the vector database
 type AlertVector struct {
 	ID        string             `json:"id"`
 	Vector    []float32          `json:"vector"`
@@ -32,7 +23,7 @@ type AlertVector struct {
 	Timestamp time.Time          `json:"timestamp"`
 }
 
-// AlertVectorPayload contains the alert data and metadata
+// AlertVectorPayload represents the payload stored with an alert vector
 type AlertVectorPayload struct {
 	Type        string                 `json:"type"`
 	Resource    string                 `json:"resource"`

@@ -28,7 +28,7 @@ type StorageConfig struct {
 func NewStorage(config StorageConfig) (Storage, error) {
 	switch config.Type {
 	case StorageTypeQdrant:
-		return NewQdrantClient(config.URL, "alerts"), nil
+		return NewQdrantClient(config.URL, "alerts")
 	case StorageTypeRedis:
 		return NewRedisClient(config.URL, config.Password, config.DB)
 	default:

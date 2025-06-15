@@ -17,16 +17,17 @@ type RedisClient struct {
 }
 
 // NewRedisClient creates a new Redis client
-func NewRedisClient(addr, password string, db int) (*RedisClient, error) {
+func NewRedisClient(url, password string, db int) (*RedisClient, error) {
 	client := redis.NewClient(&redis.Options{
-		Addr:     addr,
+		Addr:     url,
 		Password: password,
 		DB:       db,
 	})
 
+	// Test connection
 	ctx := context.Background()
 	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("error connecting to Redis: %v", err)
+		return nil, fmt.Errorf("failed to connect to Redis: %v", err)
 	}
 
 	return &RedisClient{
@@ -35,8 +36,9 @@ func NewRedisClient(addr, password string, db int) (*RedisClient, error) {
 	}, nil
 }
 
-// StoreAlert implements the Storage interface
-func (r *RedisClient) StoreAlert(anomaly types.Anomaly, events []types.Event, vector []float32) error {
+// StoreAlert stores an alert in Redis
+func (c *RedisClient) StoreAlert(vector []float32, anomaly types.Anomaly) error {
+	// Create alert vector
 	alertVector := AlertVector{
 		ID:        fmt.Sprintf("%s-%s-%d", anomaly.Type, anomaly.Resource, time.Now().UnixNano()),
 		Vector:    vector,
@@ -49,59 +51,84 @@ func (r *RedisClient) StoreAlert(anomaly types.Anomaly, events []types.Event, ve
 			Description: anomaly.Description,
 			Value:       anomaly.Value,
 			Threshold:   anomaly.Threshold,
-			Labels:      make(map[string]string),
-			Events:      events,
-			Metadata: map[string]interface{}{
-				"detection_time": anomaly.Timestamp,
-				"source":         "k8s-agent",
-			},
+			Labels:      anomaly.Labels,
+			Events:      anomaly.Events,
+			Metadata:    anomaly.Metadata,
 		},
 	}
 
-	// Marshal alert to JSON
+	// Marshal to JSON
 	data, err := json.Marshal(alertVector)
 	if err != nil {
-		return fmt.Errorf("error marshaling alert: %v", err)
+		return fmt.Errorf("failed to marshal alert vector: %v", err)
 	}
 
 	// Store in Redis
 	key := fmt.Sprintf("alert:%s", alertVector.ID)
-	if err := r.client.Set(r.ctx, key, data, 0).Err(); err != nil {
-		return fmt.Errorf("error storing alert in Redis: %v", err)
+	if err := c.client.Set(c.ctx, key, data, 24*time.Hour).Err(); err != nil {
+		return fmt.Errorf("failed to store alert in Redis: %v", err)
 	}
 
-	// Add to indexes
-	if err := r.client.SAdd(r.ctx, "alerts:all", alertVector.ID).Err(); err != nil {
-		return fmt.Errorf("error adding to all alerts index: %v", err)
-	}
-
-	if alertVector.Payload.Namespace != "" {
-		if err := r.client.SAdd(r.ctx, fmt.Sprintf("alerts:namespace:%s", alertVector.Payload.Namespace), alertVector.ID).Err(); err != nil {
-			return fmt.Errorf("error adding to namespace index: %v", err)
-		}
-	}
-
-	if alertVector.Payload.Severity != "" {
-		if err := r.client.SAdd(r.ctx, fmt.Sprintf("alerts:severity:%s", alertVector.Payload.Severity), alertVector.ID).Err(); err != nil {
-			return fmt.Errorf("error adding to severity index: %v", err)
-		}
-	}
-
-	// Add to time-based index
-	timeKey := fmt.Sprintf("alerts:time:%d", alertVector.Timestamp.Unix())
-	if err := r.client.SAdd(r.ctx, timeKey, alertVector.ID).Err(); err != nil {
-		return fmt.Errorf("error adding to time index: %v", err)
+	// Add to vector index
+	// Note: This is a simplified implementation. In a real system, you would use
+	// a proper vector similarity search library or Redis module.
+	vectorKey := fmt.Sprintf("vector:%s", alertVector.ID)
+	if err := c.client.Set(c.ctx, vectorKey, vector, 24*time.Hour).Err(); err != nil {
+		return fmt.Errorf("failed to store vector in Redis: %v", err)
 	}
 
 	return nil
 }
 
-// SearchSimilarAlerts implements the Storage interface
-func (r *RedisClient) SearchSimilarAlerts(vector []float32, limit int) ([]AlertVector, error) {
-	// Note: Redis doesn't have built-in vector similarity search
-	// In a production environment, you would use RedisAI or RedisSearch with vector similarity
-	// For now, we'll return an error
-	return nil, fmt.Errorf("vector similarity search not implemented for Redis")
+// SearchSimilarAlerts searches for similar alerts in Redis
+func (c *RedisClient) SearchSimilarAlerts(vector []float32, limit int) ([]types.Anomaly, error) {
+	// Note: This is a simplified implementation. In a real system, you would use
+	// a proper vector similarity search library or Redis module.
+	// This implementation just returns the most recent alerts.
+
+	// Get all vector keys
+	keys, err := c.client.Keys(c.ctx, "vector:*").Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get vector keys: %v", err)
+	}
+
+	// Get the most recent alerts
+	var anomalies []types.Anomaly
+	for _, key := range keys {
+		// Get alert data
+		alertKey := fmt.Sprintf("alert:%s", key[7:]) // Remove "vector:" prefix
+		data, err := c.client.Get(c.ctx, alertKey).Bytes()
+		if err != nil {
+			continue
+		}
+
+		// Unmarshal alert
+		var alertVector AlertVector
+		if err := json.Unmarshal(data, &alertVector); err != nil {
+			continue
+		}
+
+		// Convert to anomaly
+		anomaly := types.Anomaly{
+			Type:        alertVector.Payload.Type,
+			Resource:    alertVector.Payload.Resource,
+			Namespace:   alertVector.Payload.Namespace,
+			Severity:    alertVector.Payload.Severity,
+			Description: alertVector.Payload.Description,
+			Value:       alertVector.Payload.Value,
+			Threshold:   alertVector.Payload.Threshold,
+			Labels:      alertVector.Payload.Labels,
+			Events:      alertVector.Payload.Events,
+			Metadata:    alertVector.Payload.Metadata,
+		}
+
+		anomalies = append(anomalies, anomaly)
+		if len(anomalies) >= limit {
+			break
+		}
+	}
+
+	return anomalies, nil
 }
 
 // GetAlert implements the Storage interface

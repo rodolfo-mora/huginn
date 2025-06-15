@@ -1,0 +1,71 @@
+# Kubernetes configuration
+kubernetes:
+  kubeconfig: ~/.kube/config
+  context: ""
+  namespace: ""
+  resources:
+    - pods
+    - deployments
+    - services
+    - nodes
+
+# Storage configuration
+storage:
+  type: qdrant
+  qdrant:
+    url: http://localhost:6333
+    collection: alerts
+    vectorSize: 384
+    distanceMetric: cosine
+  redis:
+    address: localhost:6379
+    password: ""
+    db: 0
+    keyPrefix: "valkyrie:"
+
+# Notification configuration
+notification:
+  enabled: true
+  type: alertmanager
+  minSeverity: warning
+  slack:
+    webhookUrl: ""
+    channel: "#alerts"
+    username: "Valkyrie"
+  email:
+    smtpHost: ""
+    smtpPort: 587
+    username: ""
+    password: ""
+    from: ""
+    to: []
+  webhook:
+    url: ""
+    method: POST
+    headers: {}
+  alertmanager:
+    url: http://localhost:9093
+    labels:
+      app: valkyrie
+      severity: warning
+
+# Agent configuration
+agent:
+  learningRate: 0.1
+  observationInterval: 30s
+  maxHistorySize: 1000
+  thresholds:
+    cpu: 80.0
+    memory: 80.0
+    podRestarts: 3
+
+# Embedding configuration
+embedding:
+  type: simple
+  dimension: 384
+  openai:
+    apiKey: ""
+    model: text-embedding-ada-002
+  sentenceTransformers:
+    model: all-MiniLM-L6-v2
+    device: cpu 
