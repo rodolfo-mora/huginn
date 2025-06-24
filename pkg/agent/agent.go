@@ -20,6 +20,7 @@ import (
 	"github.com/rodgon/valkyrie/pkg/types"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metricsapi "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
@@ -149,61 +150,65 @@ func (a *Agent) ObserveCluster() error {
 		return fmt.Errorf("failed to create metrics client: %v", err)
 	}
 
+	// Collect namespaces (always needed for resource organization)
 	nsList, err := a.k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list namespaces: %v", err)
 	}
 
-	nodeList, err := a.k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to list nodes: %v", err)
+	// Initialize cluster state
+	var nodes []types.Node
+	var resources = make(map[string]types.ResourceList)
+
+	// Collect node data if configured
+	if a.shouldCollectResource("nodes") {
+		nodes, err = a.collectNodes(ctx, metricsClient)
+		if err != nil {
+			return fmt.Errorf("failed to collect nodes: %v", err)
+		}
 	}
 
-	nodeMetrics, err := metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to get node metrics: %v", err)
-	}
+	// Collect resource data per namespace
+	for _, ns := range nsList.Items {
+		resourceList := types.ResourceList{}
 
-	nodes := make([]types.Node, 0, len(nodeList.Items))
-	for _, node := range nodeList.Items {
-		cpuUsage := "0"
-		memoryUsage := "0"
-		for _, m := range nodeMetrics.Items {
-			if m.Name == node.Name {
-				cpuUsage = m.Usage.Cpu().AsDec().String()
-				memoryUsage = m.Usage.Memory().AsDec().String()
-				break
+		// Collect pods if configured
+		if a.shouldCollectResource("pods") {
+			pods, err := a.collectPods(ctx, ns.Name)
+			if err != nil {
+				log.Printf("Warning: failed to collect pods in namespace %s: %v", ns.Name, err)
+			} else {
+				resourceList.Pods = pods
 			}
 		}
-		nodes = append(nodes, types.Node{
-			Name:            node.Name,
-			CPUUsage:        cpuUsage,
-			MemoryUsage:     memoryUsage,
-			Condition:       string(node.Status.Conditions[len(node.Status.Conditions)-1].Type),
-			ConditionStatus: string(node.Status.Conditions[len(node.Status.Conditions)-1].Status),
-		})
+
+		// Collect services if configured
+		if a.shouldCollectResource("services") {
+			services, err := a.collectServices(ctx, ns.Name)
+			if err != nil {
+				log.Printf("Warning: failed to collect services in namespace %s: %v", ns.Name, err)
+			} else {
+				resourceList.Services = services
+			}
+		}
+
+		// Collect deployments if configured
+		if a.shouldCollectResource("deployments") {
+			deployments, err := a.collectDeployments(ctx, ns.Name)
+			if err != nil {
+				log.Printf("Warning: failed to collect deployments in namespace %s: %v", ns.Name, err)
+			} else {
+				resourceList.Deployments = deployments
+			}
+		}
+
+		// Only add namespace to resources if we collected any data
+		if len(resourceList.Pods) > 0 || len(resourceList.Services) > 0 || len(resourceList.Deployments) > 0 {
+			resources[ns.Name] = resourceList
+		}
 	}
 
-	resources := make(map[string]types.ResourceList)
-	for _, ns := range nsList.Items {
-		podList, err := a.k8sClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{})
-		if err != nil {
-			return fmt.Errorf("failed to list pods in namespace %s: %v", ns.Name, err)
-		}
-		pods := make([]types.Pod, 0, len(podList.Items))
-		for _, pod := range podList.Items {
-			pods = append(pods, types.Pod{
-				Name:         pod.Name,
-				Namespace:    pod.Namespace,
-				Status:       string(pod.Status.Phase),
-				RestartCount: getPodRestartCount(&pod),
-			})
-		}
-		resources[ns.Name] = types.ResourceList{
-			Pods: pods,
-		}
-	}
-
+	// Build namespace names list
 	nsNames := make([]string, 0, len(nsList.Items))
 	for _, ns := range nsList.Items {
 		nsNames = append(nsNames, ns.Name)
@@ -215,6 +220,137 @@ func (a *Agent) ObserveCluster() error {
 		Resources:  resources,
 	}
 	return nil
+}
+
+// collectNodes collects node data including metrics
+func (a *Agent) collectNodes(ctx context.Context, metricsClient *metricsv.Clientset) ([]types.Node, error) {
+	nodeList, err := a.k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list nodes: %v", err)
+	}
+
+	var nodeMetrics *metricsapi.NodeMetricsList
+	if metricsClient != nil {
+		nodeMetrics, err = metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.Printf("Warning: failed to get node metrics: %v", err)
+		}
+	}
+
+	nodes := make([]types.Node, 0, len(nodeList.Items))
+	for _, node := range nodeList.Items {
+		cpuUsage := "0"
+		memoryUsage := "0"
+		if nodeMetrics != nil {
+			for _, m := range nodeMetrics.Items {
+				if m.Name == node.Name {
+					cpuUsage = m.Usage.Cpu().AsDec().String()
+					memoryUsage = m.Usage.Memory().AsDec().String()
+					break
+				}
+			}
+		}
+		nodes = append(nodes, types.Node{
+			Name:            node.Name,
+			CPUUsage:        cpuUsage,
+			MemoryUsage:     memoryUsage,
+			Condition:       getNodeCondition(&node),
+			ConditionStatus: getNodeConditionStatus(&node),
+			Status:          string(node.Status.Phase),
+		})
+	}
+
+	return nodes, nil
+}
+
+// collectPods collects pod data for a specific namespace
+func (a *Agent) collectPods(ctx context.Context, namespace string) ([]types.Pod, error) {
+	podList, err := a.k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods in namespace %s: %v", namespace, err)
+	}
+
+	pods := make([]types.Pod, 0, len(podList.Items))
+	for _, pod := range podList.Items {
+		pods = append(pods, types.Pod{
+			Name:         pod.Name,
+			Namespace:    pod.Namespace,
+			Status:       string(pod.Status.Phase),
+			RestartCount: getPodRestartCount(&pod),
+		})
+	}
+
+	return pods, nil
+}
+
+// collectServices collects service data for a specific namespace
+func (a *Agent) collectServices(ctx context.Context, namespace string) ([]types.Service, error) {
+	serviceList, err := a.k8sClient.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list services in namespace %s: %v", namespace, err)
+	}
+
+	services := make([]types.Service, 0, len(serviceList.Items))
+	for _, service := range serviceList.Items {
+		services = append(services, types.Service{
+			Name: service.Name,
+			Type: string(service.Spec.Type),
+		})
+	}
+
+	return services, nil
+}
+
+// collectDeployments collects deployment data for a specific namespace
+func (a *Agent) collectDeployments(ctx context.Context, namespace string) ([]types.Deployment, error) {
+	deploymentList, err := a.k8sClient.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list deployments in namespace %s: %v", namespace, err)
+	}
+
+	deployments := make([]types.Deployment, 0, len(deploymentList.Items))
+	for _, deployment := range deploymentList.Items {
+		replicas := int32(0)
+		if deployment.Spec.Replicas != nil {
+			replicas = *deployment.Spec.Replicas
+		}
+		deployments = append(deployments, types.Deployment{
+			Name:     deployment.Name,
+			Replicas: replicas,
+		})
+	}
+
+	return deployments, nil
+}
+
+// shouldCollectResource checks if a resource type should be collected based on configuration
+func (a *Agent) shouldCollectResource(resourceType string) bool {
+	for _, resource := range a.config.Kubernetes.Resources {
+		if resource == resourceType {
+			return true
+		}
+	}
+	return false
+}
+
+// getNodeCondition returns the primary condition of a node
+func getNodeCondition(node *v1.Node) string {
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == v1.NodeReady {
+			return string(condition.Type)
+		}
+	}
+	return "Unknown"
+}
+
+// getNodeConditionStatus returns the status of the primary condition
+func getNodeConditionStatus(node *v1.Node) string {
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == v1.NodeReady {
+			return string(condition.Status)
+		}
+	}
+	return "Unknown"
 }
 
 // getPodRestartCount returns the total restart count for a pod

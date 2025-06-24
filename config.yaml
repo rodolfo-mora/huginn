@@ -5,9 +5,9 @@ kubernetes:
   context: "k8s.sandbox.kindredgroup.com"
   namespace: ""
   resources:
-    - pods
-    - deployments
-    - services
+    # - pods
+    # - deployments
+    # - services
     - nodes
 
 # Storage configuration
