@@ -27,6 +27,20 @@ This directory contains a complete monitoring stack for the Valkyrie anomaly det
 - 200-hour data retention
 - Integrated with Alertmanager for alerting
 
+### Resource-Based Metrics
+**Important**: Prometheus metrics are only created for resources enabled in your `kubernetes.resources` configuration:
+
+- **If `nodes` is enabled**: All node metrics (CPU, memory, capacity, statistics) are created
+- **If `pods` is enabled**: All pod metrics (restart counts, statistics) are created
+- **If `services` is enabled**: Service metrics are created (future enhancement)
+- **If `deployments` is enabled**: Deployment metrics are created (future enhancement)
+
+**Always enabled metrics**:
+- Anomaly detection metrics (`valkyrie_anomaly_detected_total`, `valkyrie_anomaly_severity_score`)
+- Historical data metrics (`valkyrie_metric_history`)
+
+This ensures efficient resource usage and prevents unnecessary metric collection.
+
 ### Alertmanager Configuration (`alertmanager.yml`)
 - Webhook notifications (configurable endpoint)
 - Email notifications (requires SMTP configuration)
@@ -50,9 +64,13 @@ This directory contains a complete monitoring stack for the Valkyrie anomaly det
 ## Available Metrics
 
 ### Node Metrics
-- `valkyrie_node_cpu_usage_percent` - Current CPU usage per node
-- `valkyrie_node_memory_usage_percent` - Current memory usage per node
-- `valkyrie_node_cpu_mean_percent` - Mean CPU usage per node
+- `valkyrie_node_cpu_raw` - Raw CPU usage per node (in cores, e.g., 1.5)
+- `valkyrie_node_memory_raw` - Raw memory usage per node (in bytes)
+- `valkyrie_node_cpu_capacity` - Total CPU capacity per node (in cores)
+- `valkyrie_node_memory_capacity` - Total memory capacity per node (in bytes)
+- `valkyrie_node_cpu_usage_percent` - Current CPU usage percentage per node (0-100)
+- `valkyrie_node_memory_usage_percent` - Current memory usage percentage per node (0-100)
+- `valkyrie_node_cpu_mean_percent` - Mean CPU usage percentage per node
 - `valkyrie_node_cpu_stddev_percent` - Standard deviation of CPU usage per node
 - `valkyrie_node_cpu_ewma_percent` - EWMA of CPU usage per node
 - Similar metrics for memory
@@ -126,8 +144,24 @@ receivers:
 ## Example Prometheus Queries
 
 ```promql
-# Get current CPU usage for all nodes
+# Get current CPU usage percentage for all nodes
 valkyrie_node_cpu_usage_percent
+
+# Get current memory usage percentage for all nodes
+valkyrie_node_memory_usage_percent
+
+# Get raw CPU usage in cores
+valkyrie_node_cpu_raw
+
+# Get raw memory usage in bytes
+valkyrie_node_memory_raw
+
+# Get node capacity information
+valkyrie_node_cpu_capacity
+valkyrie_node_memory_capacity
+
+# Calculate actual usage vs capacity ratio
+valkyrie_node_cpu_raw / valkyrie_node_cpu_capacity * 100
 
 # Get anomalies detected in the last hour
 increase(valkyrie_anomaly_detected_total[1h])
@@ -143,6 +177,15 @@ valkyrie_pod_restart_count > 5
 
 # Get active alerts
 ALERTS{alertstate="firing"}
+
+# Get nodes with memory usage above 90%
+valkyrie_node_memory_usage_percent > 90
+
+# Calculate memory usage in GB
+valkyrie_node_memory_raw / 1024 / 1024 / 1024
+
+# Calculate CPU usage in millicores
+valkyrie_node_cpu_raw * 1000
 ```
 
 ## Dashboard Features

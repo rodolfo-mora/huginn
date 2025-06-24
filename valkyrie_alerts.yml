@@ -1,7 +1,7 @@
 groups:
   - name: valkyrie_alerts
     rules:
-      # High CPU Usage Alert
+      # High CPU Usage Alert (using correct percentage)
       - alert: HighCPUUsage
         expr: valkyrie_node_cpu_usage_percent > 80
         for: 2m
@@ -12,7 +12,7 @@ groups:
           summary: "High CPU usage detected on {{ $labels.node }}"
           description: "Node {{ $labels.node }} has high CPU usage: {{ $value }}%"
 
-      # Critical CPU Usage Alert
+      # Critical CPU Usage Alert (using correct percentage)
       - alert: CriticalCPUUsage
         expr: valkyrie_node_cpu_usage_percent > 90
         for: 1m
@@ -23,7 +23,7 @@ groups:
           summary: "Critical CPU usage detected on {{ $labels.node }}"
           description: "Node {{ $labels.node }} has critical CPU usage: {{ $value }}%"
 
-      # High Memory Usage Alert
+      # High Memory Usage Alert (using correct percentage)
       - alert: HighMemoryUsage
         expr: valkyrie_node_memory_usage_percent > 80
         for: 2m
@@ -34,7 +34,7 @@ groups:
           summary: "High memory usage detected on {{ $labels.node }}"
           description: "Node {{ $labels.node }} has high memory usage: {{ $value }}%"
 
-      # Critical Memory Usage Alert
+      # Critical Memory Usage Alert (using correct percentage)
       - alert: CriticalMemoryUsage
         expr: valkyrie_node_memory_usage_percent > 90
         for: 1m
@@ -87,7 +87,7 @@ groups:
           summary: "High anomaly rate detected"
           description: "Anomaly rate is {{ $value }} per second over the last 5 minutes"
 
-      # CPU Deviation Alert
+      # CPU Deviation Alert (using correct percentage)
       - alert: CPUDeviationFromMean
         expr: (valkyrie_node_cpu_usage_percent / valkyrie_node_cpu_mean_percent) > 2
         for: 2m
@@ -98,7 +98,7 @@ groups:
           summary: "CPU usage significantly above mean on {{ $labels.node }}"
           description: "CPU usage is {{ $value }}x the historical mean on {{ $labels.node }}"
 
-      # Memory Deviation Alert
+      # Memory Deviation Alert (using correct percentage)
       - alert: MemoryDeviationFromMean
         expr: (valkyrie_node_memory_usage_percent / valkyrie_node_memory_mean_percent) > 2
         for: 2m

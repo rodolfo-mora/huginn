@@ -13,12 +13,16 @@ type ClusterState struct {
 
 // Node represents a Kubernetes node
 type Node struct {
-	Name            string
-	CPUUsage        string
-	MemoryUsage     string
-	Condition       string
-	ConditionStatus string
-	Status          string
+	Name               string
+	CPUUsage           string  // Raw CPU usage (e.g., "100m")
+	MemoryUsage        string  // Raw memory usage (e.g., "512Mi")
+	CPUCapacity        string  // Total CPU capacity (e.g., "4")
+	MemoryCapacity     string  // Total memory capacity (e.g., "8Gi")
+	CPUUsagePercent    float64 // Calculated CPU usage percentage
+	MemoryUsagePercent float64 // Calculated memory usage percentage
+	Condition          string
+	ConditionStatus    string
+	Status             string
 }
 
 // ResourceList represents a list of resources in a namespace

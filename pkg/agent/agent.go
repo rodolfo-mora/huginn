@@ -64,7 +64,7 @@ func NewAgent(cfg *config.Config) (*Agent, error) {
 	detector.SetMaxHistorySize(cfg.AnomalyDetection.MaxHistorySize)
 
 	// Create Prometheus metrics exporter
-	metricsExporter := metrics.NewPrometheusExporter(detector)
+	metricsExporter := metrics.NewPrometheusExporter(detector, cfg)
 
 	// Create metrics server
 	metricsServer := metrics.NewMetricsServer(":8080", metricsExporter)
@@ -250,17 +250,117 @@ func (a *Agent) collectNodes(ctx context.Context, metricsClient *metricsv.Client
 				}
 			}
 		}
+
+		// Get node capacity
+		cpuCapacity := node.Status.Capacity.Cpu().AsDec().String()
+		memoryCapacity := node.Status.Capacity.Memory().AsDec().String()
+
+		// Calculate percentages
+		cpuUsagePercent := calculateCPUPercentage(cpuUsage, cpuCapacity)
+		memoryUsagePercent := calculateMemoryPercentage(memoryUsage, memoryCapacity)
+
 		nodes = append(nodes, types.Node{
-			Name:            node.Name,
-			CPUUsage:        cpuUsage,
-			MemoryUsage:     memoryUsage,
-			Condition:       getNodeCondition(&node),
-			ConditionStatus: getNodeConditionStatus(&node),
-			Status:          string(node.Status.Phase),
+			Name:               node.Name,
+			CPUUsage:           cpuUsage,
+			MemoryUsage:        memoryUsage,
+			CPUCapacity:        cpuCapacity,
+			MemoryCapacity:     memoryCapacity,
+			CPUUsagePercent:    cpuUsagePercent,
+			MemoryUsagePercent: memoryUsagePercent,
+			Condition:          getNodeCondition(&node),
+			ConditionStatus:    getNodeConditionStatus(&node),
+			Status:             string(node.Status.Phase),
 		})
 	}
 
 	return nodes, nil
+}
+
+// calculateCPUPercentage calculates CPU usage percentage
+func calculateCPUPercentage(usage, capacity string) float64 {
+	usageValue := parseCPUValue(usage)
+	capacityValue := parseCPUValue(capacity)
+
+	if capacityValue == 0 {
+		return 0
+	}
+
+	return (usageValue / capacityValue) * 100
+}
+
+// calculateMemoryPercentage calculates memory usage percentage
+func calculateMemoryPercentage(usage, capacity string) float64 {
+	usageValue := parseMemoryValue(usage)
+	capacityValue := parseMemoryValue(capacity)
+
+	if capacityValue == 0 {
+		return 0
+	}
+
+	return (usageValue / capacityValue) * 100
+}
+
+// parseCPUValue converts CPU string to float64 (handles "100m" format)
+func parseCPUValue(cpuStr string) float64 {
+	var value float64
+	var unit string
+	_, err := fmt.Sscanf(cpuStr, "%f%s", &value, &unit)
+	if err != nil {
+		// Try parsing as plain number
+		_, err := fmt.Sscanf(cpuStr, "%f", &value)
+		if err != nil {
+			return 0
+		}
+		return value
+	}
+
+	// Convert millicores to cores
+	if unit == "m" {
+		return value / 1000
+	}
+
+	return value
+}
+
+// parseMemoryValue converts memory string to float64 (handles "512Mi", "1Gi" format)
+func parseMemoryValue(memoryStr string) float64 {
+	var value float64
+	var unit string
+	_, err := fmt.Sscanf(memoryStr, "%f%s", &value, &unit)
+	if err != nil {
+		// Try parsing as plain number
+		_, err := fmt.Sscanf(memoryStr, "%f", &value)
+		if err != nil {
+			return 0
+		}
+		return value
+	}
+
+	// Convert to bytes
+	switch unit {
+	case "Ki":
+		return value * 1024
+	case "Mi":
+		return value * 1024 * 1024
+	case "Gi":
+		return value * 1024 * 1024 * 1024
+	case "Ti":
+		return value * 1024 * 1024 * 1024 * 1024
+	case "Pi":
+		return value * 1024 * 1024 * 1024 * 1024 * 1024
+	case "k", "K":
+		return value * 1000
+	case "m", "M":
+		return value * 1000 * 1000
+	case "g", "G":
+		return value * 1000 * 1000 * 1000
+	case "t", "T":
+		return value * 1000 * 1000 * 1000 * 1000
+	case "p", "P":
+		return value * 1000 * 1000 * 1000 * 1000 * 1000
+	default:
+		return value
+	}
 }
 
 // collectPods collects pod data for a specific namespace
