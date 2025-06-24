@@ -138,9 +138,11 @@ func (n *AlertmanagerNotifier) Notify(anomaly types.Anomaly) error {
 		GeneratorURL: "https://github.com/rodgon/valkyrie",
 	}
 
-	payload := types.AlertmanagerPayload{
-		Alerts: []types.AlertmanagerAlert{alert},
-	}
+	// payload := types.AlertmanagerPayload{
+	// 	Alerts: []types.AlertmanagerAlert{alert},
+	// }
+
+	payload := []types.AlertmanagerAlert{alert}
 
 	jsonData, err := json.Marshal(payload)
 	if err != nil {

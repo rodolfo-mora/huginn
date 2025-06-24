@@ -5,36 +5,43 @@ import (
 	"log"
 	"time"
 
-	"path/filepath"
-
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
+
+	"context"
 
 	"github.com/rodgon/valkyrie/pkg/anomaly"
 	"github.com/rodgon/valkyrie/pkg/config"
 	"github.com/rodgon/valkyrie/pkg/embedding"
+	"github.com/rodgon/valkyrie/pkg/metrics"
 	"github.com/rodgon/valkyrie/pkg/notification"
 	"github.com/rodgon/valkyrie/pkg/storage"
 	"github.com/rodgon/valkyrie/pkg/types"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
 
 // Agent represents the main agent that observes and learns from the cluster
 type Agent struct {
-	k8sClient    *kubernetes.Clientset
-	state        types.ClusterState
-	observations []types.Observation
-	detector     *anomaly.Detector
-	notifier     notification.Notifier
-	storage      storage.Storage
-	model        embedding.Model
-	config       *config.Config
+	k8sClient     *kubernetes.Clientset
+	config        *config.Config
+	restConfig    *rest.Config
+	state         types.ClusterState
+	observations  []types.Observation
+	detector      *anomaly.Detector
+	notifier      notification.Notifier
+	storage       storage.Storage
+	model         embedding.Model
+	metrics       *metrics.PrometheusExporter
+	metricsServer *metrics.MetricsServer
 }
 
 // NewAgent creates a new agent instance
 func NewAgent(cfg *config.Config) (*Agent, error) {
 	// Load kubeconfig
-	kubeconfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
+	kubeconfig := cfg.Kubernetes.Kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build kubeconfig: %v", err)
@@ -55,16 +62,26 @@ func NewAgent(cfg *config.Config) (*Agent, error) {
 	)
 	detector.SetMaxHistorySize(cfg.AnomalyDetection.MaxHistorySize)
 
-	// Create storage client
-	storageConfig := storage.StorageConfig{
-		Type:     storage.StorageType(cfg.Storage.Type),
-		URL:      cfg.Storage.Qdrant.URL,
-		Password: cfg.Storage.Redis.Password,
-		DB:       cfg.Storage.Redis.DB,
-	}
-	storageClient, err := storage.NewStorage(storageConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create storage client: %v", err)
+	// Create Prometheus metrics exporter
+	metricsExporter := metrics.NewPrometheusExporter(detector)
+
+	// Create metrics server
+	metricsServer := metrics.NewMetricsServer(":8080", metricsExporter)
+
+	var storageClient storage.Storage
+	if cfg.Storage.StoreAlerts {
+		// Create storage client
+		storageConfig := storage.StorageConfig{
+			Type:     storage.StorageType(cfg.Storage.Type),
+			URL:      cfg.Storage.Qdrant.URL,
+			Password: cfg.Storage.Redis.Password,
+			DB:       cfg.Storage.Redis.DB,
+		}
+
+		storageClient, err = storage.NewStorage(storageConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create storage client: %v", err)
+		}
 	}
 
 	// Create embedding model
@@ -109,44 +126,109 @@ func NewAgent(cfg *config.Config) (*Agent, error) {
 	}
 
 	return &Agent{
-		k8sClient:    clientset,
-		detector:     detector,
-		notifier:     notifier,
-		storage:      storageClient,
-		model:        model,
-		config:       cfg,
-		observations: make([]types.Observation, 0),
+		k8sClient:     clientset,
+		restConfig:    config,
+		detector:      detector,
+		notifier:      notifier,
+		storage:       storageClient,
+		model:         model,
+		config:        cfg,
+		observations:  make([]types.Observation, 0),
+		metrics:       metricsExporter,
+		metricsServer: metricsServer,
 	}, nil
 }
 
 // ObserveCluster collects the current state of the cluster
 func (a *Agent) ObserveCluster() error {
-	// TODO: Implement cluster state collection
-	// This is a placeholder that creates a dummy state
+	ctx := context.Background()
+
+	// Create metrics client
+	metricsClient, err := metricsv.NewForConfig(a.restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create metrics client: %v", err)
+	}
+
+	nsList, err := a.k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list namespaces: %v", err)
+	}
+
+	nodeList, err := a.k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list nodes: %v", err)
+	}
+
+	nodeMetrics, err := metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get node metrics: %v", err)
+	}
+
+	nodes := make([]types.Node, 0, len(nodeList.Items))
+	for _, node := range nodeList.Items {
+		cpuUsage := "0"
+		memoryUsage := "0"
+		for _, m := range nodeMetrics.Items {
+			if m.Name == node.Name {
+				cpuUsage = m.Usage.Cpu().AsDec().String()
+				memoryUsage = m.Usage.Memory().AsDec().String()
+				break
+			}
+		}
+		nodes = append(nodes, types.Node{
+			Name:            node.Name,
+			CPUUsage:        cpuUsage,
+			MemoryUsage:     memoryUsage,
+			Condition:       string(node.Status.Conditions[len(node.Status.Conditions)-1].Type),
+			ConditionStatus: string(node.Status.Conditions[len(node.Status.Conditions)-1].Status),
+		})
+	}
+
+	resources := make(map[string]types.ResourceList)
+	for _, ns := range nsList.Items {
+		podList, err := a.k8sClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to list pods in namespace %s: %v", ns.Name, err)
+		}
+		pods := make([]types.Pod, 0, len(podList.Items))
+		for _, pod := range podList.Items {
+			pods = append(pods, types.Pod{
+				Name:         pod.Name,
+				Namespace:    pod.Namespace,
+				Status:       string(pod.Status.Phase),
+				RestartCount: getPodRestartCount(&pod),
+			})
+		}
+		resources[ns.Name] = types.ResourceList{
+			Pods: pods,
+		}
+	}
+
+	nsNames := make([]string, 0, len(nsList.Items))
+	for _, ns := range nsList.Items {
+		nsNames = append(nsNames, ns.Name)
+	}
+
 	a.state = types.ClusterState{
-		Namespaces: []string{"default"},
-		Nodes: []types.Node{
-			{
-				Name:        "node-1",
-				CPUUsage:    "50",
-				MemoryUsage: "60",
-				Status:      "Ready",
-			},
-		},
-		Resources: map[string]types.ResourceList{
-			"default": {
-				Pods: []types.Pod{
-					{
-						Name:         "pod-1",
-						Status:       "Running",
-						RestartCount: 0,
-					},
-				},
-			},
-		},
+		Namespaces: nsNames,
+		Nodes:      nodes,
+		Resources:  resources,
 	}
 	return nil
 }
+
+// getPodRestartCount returns the total restart count for a pod
+func getPodRestartCount(pod *v1.Pod) int32 {
+	var restarts int32
+	for _, cs := range pod.Status.ContainerStatuses {
+		restarts += cs.RestartCount
+	}
+	return restarts
+}
+
+// func (a *Agent) PrintHistory() {
+// 	a.detector.PrintHistory()
+// }
 
 // Learn processes the current state and updates the agent's knowledge
 func (a *Agent) Learn() error {
@@ -176,30 +258,44 @@ func (a *Agent) Learn() error {
 
 // DetectAnomalies checks for anomalies in the current state
 func (a *Agent) DetectAnomalies() ([]types.Anomaly, error) {
+	// Update Prometheus metrics with current cluster state
+	a.metrics.UpdateMetrics(a.state)
+
 	anomalies := a.detector.DetectAnomalies(a.state)
 
-	// Store anomalies in vector database
+	// Record anomalies in Prometheus
 	for _, anomaly := range anomalies {
-		// Generate embedding for the anomaly
-		text := fmt.Sprintf("%s %s %s %s", anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.Description)
-		vector, err := a.model.Encode(text)
-		if err != nil {
-			log.Printf("Failed to generate embedding for anomaly: %v", err)
-			continue
-		}
+		a.metrics.RecordAnomaly(anomaly)
+	}
 
-		// Store in vector database
-		err = a.storage.StoreAlert(vector, anomaly)
-		if err != nil {
-			log.Printf("Failed to store anomaly in vector database: %v", err)
-			continue
-		}
-
-		// Send notification if severity is high enough
-		if shouldNotify(anomaly, a.config.Notification.MinSeverity) {
-			err = a.notifier.Notify(anomaly)
+	// Store anomalies in vector database if enabled
+	if a.config.Storage.StoreAlerts {
+		for _, anomaly := range anomalies {
+			// Generate embedding for the anomaly
+			text := fmt.Sprintf("%s %s %s %s", anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.Description)
+			vector, err := a.model.Encode(text)
 			if err != nil {
-				log.Printf("Failed to send notification for anomaly: %v", err)
+				log.Printf("Failed to generate embedding for anomaly: %v", err)
+				continue
+			}
+
+			// Store in vector database
+			err = a.storage.StoreAlert(vector, anomaly)
+			if err != nil {
+				log.Printf("Failed to store anomaly in vector database: %v", err)
+				continue
+			}
+		}
+	}
+
+	// Send notifications if severity is high enough and notifications are enabled
+	if a.config.Notification.Enabled {
+		for _, anomaly := range anomalies {
+			if shouldNotify(anomaly, a.config.Notification.MinSeverity) {
+				err := a.notifier.Notify(anomaly)
+				if err != nil {
+					log.Printf("Failed to send notification for anomaly: %v", err)
+				}
 			}
 		}
 	}
@@ -224,8 +320,8 @@ func (a *Agent) PrintState() {
 	fmt.Printf("Namespaces: %v\n", a.state.Namespaces)
 	fmt.Printf("Nodes: %d\n", len(a.state.Nodes))
 	for _, node := range a.state.Nodes {
-		fmt.Printf("  - %s: CPU=%s, Memory=%s, Status=%s\n",
-			node.Name, node.CPUUsage, node.MemoryUsage, node.Status)
+		fmt.Printf("  - %s: CPU=%s, Memory=%s, Condition=%s, ConditionStatus=%s\n",
+			node.Name, node.CPUUsage, node.MemoryUsage, node.Condition, node.ConditionStatus)
 	}
 }
 
@@ -238,7 +334,12 @@ func (a *Agent) PrintAnomalies(anomalies []types.Anomaly) {
 
 	fmt.Printf("Detected %d anomalies:\n", len(anomalies))
 	for _, anomaly := range anomalies {
-		fmt.Printf("  - [%s] %s (%s): %s\n",
-			anomaly.Severity, anomaly.Type, anomaly.Resource, anomaly.Description)
+		fmt.Printf("  - [%s] %s (%s - %s): %s\n",
+			anomaly.Severity, anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.Description)
 	}
+}
+
+// StartMetricsServer starts the Prometheus metrics server
+func (a *Agent) StartMetricsServer() {
+	a.metricsServer.StartAsync()
 }

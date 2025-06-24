@@ -1,0 +1,194 @@
+# Valkyrie Monitoring Setup
+
+This directory contains a complete monitoring stack for the Valkyrie anomaly detection system using Prometheus, Alertmanager, and Grafana.
+
+## Quick Start
+
+1. **Start the monitoring stack:**
+   ```bash
+   docker-compose up -d
+   ```
+
+2. **Start your Valkyrie application** (make sure it's running on localhost:8080):
+   ```go
+   agent.StartMetricsServer() // This starts the metrics server on :8080
+   ```
+
+3. **Access the monitoring interfaces:**
+   - **Prometheus**: http://localhost:9190
+   - **Alertmanager**: http://localhost:9093
+   - **Grafana**: http://localhost:3000 (admin/admin)
+
+## Configuration
+
+### Prometheus Configuration (`prometheus.yml`)
+- Scrapes metrics from `host.docker.internal:8080` (your Valkyrie app)
+- 30-second scrape interval
+- 200-hour data retention
+- Integrated with Alertmanager for alerting
+
+### Alertmanager Configuration (`alertmanager.yml`)
+- Webhook notifications (configurable endpoint)
+- Email notifications (requires SMTP configuration)
+- Alert grouping and inhibition rules
+- 5-minute resolve timeout
+
+### Alerting Rules (`valkyrie_alerts.yml`)
+- **High/Critical CPU Usage**: >80% (warning), >90% (critical)
+- **High/Critical Memory Usage**: >80% (warning), >90% (critical)
+- **High/Critical Pod Restarts**: >5 (warning), >10 (critical)
+- **Anomaly Detection**: Any anomaly detected
+- **High Anomaly Rate**: >0.1 anomalies/second
+- **Deviation from Mean**: >2x historical mean
+- **Service Down**: Valkyrie metrics endpoint unavailable
+
+### Grafana Configuration
+- **Datasource**: Automatically configured to connect to Prometheus
+- **Dashboard**: Pre-configured dashboard for Valkyrie metrics
+- **Credentials**: admin/admin
+
+## Available Metrics
+
+### Node Metrics
+- `valkyrie_node_cpu_usage_percent` - Current CPU usage per node
+- `valkyrie_node_memory_usage_percent` - Current memory usage per node
+- `valkyrie_node_cpu_mean_percent` - Mean CPU usage per node
+- `valkyrie_node_cpu_stddev_percent` - Standard deviation of CPU usage per node
+- `valkyrie_node_cpu_ewma_percent` - EWMA of CPU usage per node
+- Similar metrics for memory
+
+### Pod Metrics
+- `valkyrie_pod_restart_count` - Current restart count per pod
+- `valkyrie_pod_restart_mean` - Mean restart count per pod
+- `valkyrie_pod_restart_stddev` - Standard deviation of restart count per pod
+- `valkyrie_pod_restart_ewma` - EWMA of restart count per pod
+
+### Anomaly Detection
+- `valkyrie_anomaly_detected_total` - Counter of detected anomalies
+- `valkyrie_anomaly_severity_score` - Severity score of anomalies
+
+## Alerting
+
+### Alert Severity Levels
+- **Warning**: Issues that need attention but aren't critical
+- **Critical**: Issues that require immediate attention
+
+### Alert Types
+1. **Resource Usage Alerts**
+   - High CPU/Memory usage on nodes
+   - Critical thresholds for immediate action
+
+2. **Pod Health Alerts**
+   - High restart counts indicating instability
+   - Critical restart thresholds
+
+3. **Anomaly Detection Alerts**
+   - Any anomaly detected by Valkyrie
+   - High anomaly rates indicating system issues
+
+4. **Statistical Deviation Alerts**
+   - Usage significantly above historical means
+   - Indicates unusual behavior patterns
+
+5. **Service Health Alerts**
+   - Valkyrie metrics endpoint availability
+   - Ensures monitoring system health
+
+### Configuring Notifications
+
+To configure email notifications, update `alertmanager.yml`:
+
+```yaml
+global:
+  smtp_smarthost: 'your-smtp-server:587'
+  smtp_from: 'alerts@yourcompany.com'
+  smtp_auth_username: 'your-email@yourcompany.com'
+  smtp_auth_password: 'your-password'
+
+receivers:
+  - name: 'email-notifications'
+    email_configs:
+      - to: 'your-team@yourcompany.com'
+```
+
+To configure Slack notifications:
+
+```yaml
+receivers:
+  - name: 'slack-notifications'
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#alerts'
+        title: 'Valkyrie Alert'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+```
+
+## Example Prometheus Queries
+
+```promql
+# Get current CPU usage for all nodes
+valkyrie_node_cpu_usage_percent
+
+# Get anomalies detected in the last hour
+increase(valkyrie_anomaly_detected_total[1h])
+
+# Get nodes with high CPU usage (>80%)
+valkyrie_node_cpu_usage_percent > 80
+
+# Compare current vs mean CPU usage
+valkyrie_node_cpu_usage_percent / valkyrie_node_cpu_mean_percent
+
+# Get pods with high restart counts
+valkyrie_pod_restart_count > 5
+
+# Get active alerts
+ALERTS{alertstate="firing"}
+```
+
+## Dashboard Features
+
+The pre-configured Grafana dashboard includes:
+- **Node CPU Usage** - Real-time CPU usage graphs
+- **Node Memory Usage** - Real-time memory usage graphs
+- **Anomalies Detected** - Statistics on detected anomalies
+- **Pod Restart Count** - Table view of pod restart counts
+- **CPU Statistics** - Mean and EWMA comparison
+- **Alert Status** - Current alert states
+
+## Troubleshooting
+
+### Prometheus can't scrape metrics
+1. Ensure your Valkyrie application is running on localhost:8080
+2. Check that the metrics server is started: `agent.StartMetricsServer()`
+3. Verify the `/metrics` endpoint is accessible: `curl http://localhost:8080/metrics`
+
+### Alertmanager not receiving alerts
+1. Check Prometheus alerting configuration: http://localhost:9190/config
+2. Verify Alertmanager is running: http://localhost:9093
+3. Check alert rules: http://localhost:9190/rules
+
+### Grafana can't connect to Prometheus
+1. Ensure both containers are running: `docker-compose ps`
+2. Check Prometheus is accessible: http://localhost:9190
+3. Verify the datasource configuration in Grafana
+
+### No metrics appearing
+1. Check that your Valkyrie application is calling `DetectAnomalies()` regularly
+2. Verify the Prometheus targets page: http://localhost:9190/targets
+3. Check the Prometheus logs: `docker-compose logs prometheus`
+
+### Alerts not firing
+1. Check alert rules are loaded: http://localhost:9190/rules
+2. Verify metrics are being collected
+3. Check alert expressions in `valkyrie_alerts.yml`
+
+## Stopping the Stack
+
+```bash
+docker-compose down
+```
+
+To remove all data:
+```bash
+docker-compose down -v
+``` 

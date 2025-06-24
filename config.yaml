@@ -1,7 +1,8 @@
 # Kubernetes configuration
 kubernetes:
-  kubeconfig: ~/.kube/config
-  context: ""
+  # kubeconfig: /Users/rodgon/code/kubernetes-sandbox-credentials/sandbox.aws.kindredgroup.com/kubeconfig
+  kubeconfig: /Users/rodgon/code/kubernetes-configuration/k8s.amo.sre.kindredgroup.com/cluster-config/readonly_user.conf
+  context: "k8s.sandbox.kindredgroup.com"
   namespace: ""
   resources:
     - pods
@@ -12,6 +13,7 @@ kubernetes:
 # Storage configuration
 storage:
   type: qdrant
+  storeAlerts: false
   qdrant:
     url: http://localhost:6333
     collection: alerts
@@ -44,7 +46,7 @@ notification:
     method: POST
     headers: {}
   alertmanager:
-    url: http://localhost:9093
+    url: http://localhost:9093/api/v2/alerts
     labels:
       app: valkyrie
       severity: warning

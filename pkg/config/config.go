@@ -35,9 +35,10 @@ type AnomalyDetectionConfig struct {
 
 // StorageConfig represents storage configuration
 type StorageConfig struct {
-	Type   string       `yaml:"type"`
-	Qdrant QdrantConfig `yaml:"qdrant"`
-	Redis  RedisConfig  `yaml:"redis"`
+	Type        string       `yaml:"type"`
+	StoreAlerts bool         `yaml:"storeAlerts"`
+	Qdrant      QdrantConfig `yaml:"qdrant"`
+	Redis       RedisConfig  `yaml:"redis"`
 }
 
 // QdrantConfig represents Qdrant-specific configuration

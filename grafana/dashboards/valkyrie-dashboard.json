@@ -1,0 +1,105 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Valkyrie Anomaly Detection",
+    "tags": ["valkyrie", "anomaly-detection"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Node CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_cpu_usage_percent",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Node Memory Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_memory_usage_percent",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Anomalies Detected",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(valkyrie_anomaly_detected_total[1h])",
+            "legendFormat": "{{type}} - {{resource}}"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Pod Restart Count",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "valkyrie_pod_restart_count",
+            "format": "table"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 12
+        }
+      },
+      {
+        "id": 5,
+        "title": "CPU Statistics",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_cpu_mean_percent",
+            "legendFormat": "{{node}} - Mean"
+          },
+          {
+            "expr": "valkyrie_node_cpu_ewma_percent",
+            "legendFormat": "{{node}} - EWMA"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 12
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+} 

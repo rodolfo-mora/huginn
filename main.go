@@ -37,6 +37,8 @@ func main() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
+	go a.StartMetricsServer() // Starts on :8080
+
 	for {
 		select {
 		case <-sigChan:
@@ -67,4 +69,5 @@ func main() {
 			a.PrintState()
 		}
 	}
+
 }

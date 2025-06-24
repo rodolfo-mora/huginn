@@ -1,0 +1,121 @@
+groups:
+  - name: valkyrie_alerts
+    rules:
+      # High CPU Usage Alert
+      - alert: HighCPUUsage
+        expr: valkyrie_node_cpu_usage_percent > 80
+        for: 2m
+        labels:
+          severity: warning
+          service: valkyrie
+        annotations:
+          summary: "High CPU usage detected on {{ $labels.node }}"
+          description: "Node {{ $labels.node }} has high CPU usage: {{ $value }}%"
+
+      # Critical CPU Usage Alert
+      - alert: CriticalCPUUsage
+        expr: valkyrie_node_cpu_usage_percent > 90
+        for: 1m
+        labels:
+          severity: critical
+          service: valkyrie
+        annotations:
+          summary: "Critical CPU usage detected on {{ $labels.node }}"
+          description: "Node {{ $labels.node }} has critical CPU usage: {{ $value }}%"
+
+      # High Memory Usage Alert
+      - alert: HighMemoryUsage
+        expr: valkyrie_node_memory_usage_percent > 80
+        for: 2m
+        labels:
+          severity: warning
+          service: valkyrie
+        annotations:
+          summary: "High memory usage detected on {{ $labels.node }}"
+          description: "Node {{ $labels.node }} has high memory usage: {{ $value }}%"
+
+      # Critical Memory Usage Alert
+      - alert: CriticalMemoryUsage
+        expr: valkyrie_node_memory_usage_percent > 90
+        for: 1m
+        labels:
+          severity: critical
+          service: valkyrie
+        annotations:
+          summary: "Critical memory usage detected on {{ $labels.node }}"
+          description: "Node {{ $labels.node }} has critical memory usage: {{ $value }}%"
+
+      # High Pod Restart Alert
+      - alert: HighPodRestarts
+        expr: valkyrie_pod_restart_count > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: valkyrie
+        annotations:
+          summary: "High restart count detected for pod {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times"
+
+      # Critical Pod Restart Alert
+      - alert: CriticalPodRestarts
+        expr: valkyrie_pod_restart_count > 10
+        for: 2m
+        labels:
+          severity: critical
+          service: valkyrie
+        annotations:
+          summary: "Critical restart count detected for pod {{ $labels.pod }}"
+          description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times"
+
+      # Anomaly Detection Alert
+      - alert: AnomalyDetected
+        expr: increase(valkyrie_anomaly_detected_total[5m]) > 0
+        labels:
+          severity: warning
+          service: valkyrie
+        annotations:
+          summary: "Anomaly detected in cluster"
+          description: "{{ $value }} anomalies detected in the last 5 minutes"
+
+      # High Anomaly Rate Alert
+      - alert: HighAnomalyRate
+        expr: rate(valkyrie_anomaly_detected_total[5m]) > 0.1
+        labels:
+          severity: critical
+          service: valkyrie
+        annotations:
+          summary: "High anomaly rate detected"
+          description: "Anomaly rate is {{ $value }} per second over the last 5 minutes"
+
+      # CPU Deviation Alert
+      - alert: CPUDeviationFromMean
+        expr: (valkyrie_node_cpu_usage_percent / valkyrie_node_cpu_mean_percent) > 2
+        for: 2m
+        labels:
+          severity: warning
+          service: valkyrie
+        annotations:
+          summary: "CPU usage significantly above mean on {{ $labels.node }}"
+          description: "CPU usage is {{ $value }}x the historical mean on {{ $labels.node }}"
+
+      # Memory Deviation Alert
+      - alert: MemoryDeviationFromMean
+        expr: (valkyrie_node_memory_usage_percent / valkyrie_node_memory_mean_percent) > 2
+        for: 2m
+        labels:
+          severity: warning
+          service: valkyrie
+        annotations:
+          summary: "Memory usage significantly above mean on {{ $labels.node }}"
+          description: "Memory usage is {{ $value }}x the historical mean on {{ $labels.node }}"
+
+      # Service Down Alert (if Valkyrie metrics stop coming)
+      - alert: ValkyrieMetricsDown
+        expr: up{job="valkyrie"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: valkyrie
+        annotations:
+          summary: "Valkyrie metrics endpoint is down"
+          description: "Valkyrie metrics endpoint has been down for more than 1 minute" 

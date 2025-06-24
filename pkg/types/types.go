@@ -13,10 +13,12 @@ type ClusterState struct {
 
 // Node represents a Kubernetes node
 type Node struct {
-	Name        string
-	CPUUsage    string
-	MemoryUsage string
-	Status      string
+	Name            string
+	CPUUsage        string
+	MemoryUsage     string
+	Condition       string
+	ConditionStatus string
+	Status          string
 }
 
 // ResourceList represents a list of resources in a namespace
@@ -29,6 +31,7 @@ type ResourceList struct {
 // Pod represents a Kubernetes pod
 type Pod struct {
 	Name         string
+	Namespace    string
 	Status       string
 	RestartCount int32
 }
@@ -86,5 +89,5 @@ type AlertmanagerAlert struct {
 
 // AlertmanagerPayload represents the payload sent to Alertmanager
 type AlertmanagerPayload struct {
-	Alerts []AlertmanagerAlert `json:"alerts"`
+	Alerts []AlertmanagerAlert // `json:"alerts"`
 }
