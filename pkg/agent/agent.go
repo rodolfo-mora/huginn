@@ -55,13 +55,15 @@ func NewAgent(cfg *config.Config) (*Agent, error) {
 	}
 
 	// Create detector
-	detector := anomaly.NewDetector()
-	detector.SetThresholds(
+	detector := anomaly.NewDetector(
 		cfg.AnomalyDetection.CPUThreshold,
 		cfg.AnomalyDetection.MemoryThreshold,
 		cfg.AnomalyDetection.PodRestartThreshold,
+		cfg.AnomalyDetection.MaxHistorySize,
+		cfg.AnomalyDetection.CPUAlpha,
+		cfg.AnomalyDetection.MemoryAlpha,
+		cfg.AnomalyDetection.RestartAlpha,
 	)
-	detector.SetMaxHistorySize(cfg.AnomalyDetection.MaxHistorySize)
 
 	// Create Prometheus metrics exporter
 	metricsExporter := metrics.NewPrometheusExporter(detector, cfg)
@@ -559,8 +561,8 @@ func (a *Agent) PrintState() {
 	fmt.Printf("Namespaces: %v\n", a.state.Namespaces)
 	fmt.Printf("Nodes: %d\n", len(a.state.Nodes))
 	for _, node := range a.state.Nodes {
-		fmt.Printf("  - %s: CPU=%s, Memory=%s, Condition=%s, ConditionStatus=%s\n",
-			node.Name, node.CPUUsage, node.MemoryUsage, node.Condition, node.ConditionStatus)
+		fmt.Printf("  - %s: CPU=%.2f%%, Memory=%.2f%%, Condition=%s, ConditionStatus=%s\n",
+			node.Name, node.CPUUsagePercent, node.MemoryUsagePercent, node.Condition, node.ConditionStatus)
 	}
 }
 

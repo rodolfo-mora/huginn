@@ -48,20 +48,20 @@ type MetricStats struct {
 //   - For rapid change detection, use a higher alpha (e.g., 0.5–0.8).
 //   - Typical values: 0.2–0.4 for most monitoring scenarios.
 //   - Try different values and plot the results to see what works best for your use case.
-func NewDetector() *Detector {
+func NewDetector(cpuThreshold, memoryThreshold float64, podRestarts int, maxHistorySize int, cpuAlpha, memoryAlpha, restartAlpha float64) *Detector {
 	return &Detector{
-		cpuThreshold:    80,
-		memoryThreshold: 80,
-		podRestarts:     3,
-		maxHistorySize:  1000,
+		cpuThreshold:    cpuThreshold,
+		memoryThreshold: memoryThreshold,
+		podRestarts:     podRestarts,
+		maxHistorySize:  maxHistorySize,
 		cpuStats: &MetricStats{
-			alpha: 0.3, // Smoothing factor
+			alpha: cpuAlpha,
 		},
 		memoryStats: &MetricStats{
-			alpha: 0.3,
+			alpha: memoryAlpha,
 		},
 		restartStats: &MetricStats{
-			alpha: 0.3,
+			alpha: restartAlpha,
 		},
 	}
 }

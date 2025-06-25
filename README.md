@@ -74,6 +74,9 @@ anomalyDetection:
   memoryThreshold: 80.0
   podRestartThreshold: 3
   maxHistorySize: 1000
+  cpuAlpha: 0.3      # EWMA smoothing factor for CPU (0.1-0.8)
+  memoryAlpha: 0.3   # EWMA smoothing factor for Memory (0.1-0.8)
+  restartAlpha: 0.3  # EWMA smoothing factor for Pod Restarts (0.1-0.8)
 
 # Embedding configuration
 embedding:

@@ -31,6 +31,9 @@ type AnomalyDetectionConfig struct {
 	MemoryThreshold     float64 `yaml:"memoryThreshold"`
 	PodRestartThreshold int     `yaml:"podRestartThreshold"`
 	MaxHistorySize      int     `yaml:"maxHistorySize"`
+	CPUAlpha            float64 `yaml:"cpuAlpha"`
+	MemoryAlpha         float64 `yaml:"memoryAlpha"`
+	RestartAlpha        float64 `yaml:"restartAlpha"`
 }
 
 // StorageConfig represents storage configuration
@@ -180,6 +183,17 @@ func setDefaults(config *Config) {
 	}
 	if config.AnomalyDetection.MaxHistorySize == 0 {
 		config.AnomalyDetection.MaxHistorySize = 1000
+	}
+
+	// Alpha defaults for EWMA smoothing
+	if config.AnomalyDetection.CPUAlpha == 0 {
+		config.AnomalyDetection.CPUAlpha = 0.3
+	}
+	if config.AnomalyDetection.MemoryAlpha == 0 {
+		config.AnomalyDetection.MemoryAlpha = 0.3
+	}
+	if config.AnomalyDetection.RestartAlpha == 0 {
+		config.AnomalyDetection.RestartAlpha = 0.3
 	}
 
 	// Embedding defaults
