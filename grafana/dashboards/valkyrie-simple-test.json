@@ -1,0 +1,50 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Valkyrie Simple Test",
+    "tags": ["valkyrie", "test"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Node CPU Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_cpu_usage_percent",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Anomalies Detected",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(valkyrie_anomaly_detected_total[1h])",
+            "legendFormat": "{{type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 8
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+} 

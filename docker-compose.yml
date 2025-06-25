@@ -39,7 +39,7 @@ services:
       - valkyrie-network
 
   grafana:
-    image: grafana/grafana:12.0.0
+    image: grafana/grafana:12.0.2
     container_name: valkyrie-grafana
     ports:
       - "3000:3000"

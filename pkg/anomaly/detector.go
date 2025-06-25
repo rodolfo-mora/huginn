@@ -55,13 +55,13 @@ func NewDetector() *Detector {
 		podRestarts:     3,
 		maxHistorySize:  1000,
 		cpuStats: &MetricStats{
-			alpha: 0.015, // Smoothing factor
+			alpha: 0.3, // Smoothing factor
 		},
 		memoryStats: &MetricStats{
-			alpha: 0.015,
+			alpha: 0.3,
 		},
 		restartStats: &MetricStats{
-			alpha: 0.015,
+			alpha: 0.3,
 		},
 	}
 }
@@ -190,21 +190,23 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 
 	// For each node, record and analyze metrics
 	for _, node := range state.Nodes {
-		cpuUsage := parseResourceValue(node.CPUUsage)
-		memoryUsage := parseResourceValue(node.MemoryUsage)
-		d.recordObservation("node", node.Name, "cpu", cpuUsage)
-		d.recordObservation("node", node.Name, "memory", memoryUsage)
+		// Use pre-calculated percentage values instead of raw resource values
+		cpuUsagePercent := node.CPUUsagePercent
+		memoryUsagePercent := node.MemoryUsagePercent
+
+		d.recordObservation("node", node.Name, "cpu", cpuUsagePercent)
+		d.recordObservation("node", node.Name, "memory", memoryUsagePercent)
 
 		cpuVals := d.GetMetricHistory("node", node.Name, "cpu")
 		cpuMean, cpuStd, cpuEwma := d.ComputeStats(cpuVals, d.cpuStats.alpha)
-		if isAnomalyHistory(cpuUsage, cpuMean, cpuStd, cpuEwma, d.cpuThreshold) {
+		if isAnomalyHistory(cpuUsagePercent, cpuMean, cpuStd, cpuEwma, d.cpuThreshold) {
 			anomalies = append(anomalies, types.Anomaly{
 				Type:     "HighCPUUsage",
 				Resource: node.Name,
 				Severity: "High",
 				Description: fmt.Sprintf("CPU usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)",
-					cpuUsage, cpuMean, cpuStd),
-				Value:     cpuUsage,
+					cpuUsagePercent, cpuMean, cpuStd),
+				Value:     cpuUsagePercent,
 				Threshold: d.cpuThreshold,
 				Timestamp: time.Now(),
 			})
@@ -212,14 +214,14 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 
 		memoryVals := d.GetMetricHistory("node", node.Name, "memory")
 		memMean, memStd, memEwma := d.ComputeStats(memoryVals, d.memoryStats.alpha)
-		if isAnomalyHistory(memoryUsage, memMean, memStd, memEwma, d.memoryThreshold) {
+		if isAnomalyHistory(memoryUsagePercent, memMean, memStd, memEwma, d.memoryThreshold) {
 			anomalies = append(anomalies, types.Anomaly{
 				Type:     "HighMemoryUsage",
 				Resource: node.Name,
 				Severity: "High",
 				Description: fmt.Sprintf("Memory usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)",
-					memoryUsage, memMean, memStd),
-				Value:     memoryUsage,
+					memoryUsagePercent, memMean, memStd),
+				Value:     memoryUsagePercent,
 				Threshold: d.memoryThreshold,
 				Timestamp: time.Now(),
 			})

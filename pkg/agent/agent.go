@@ -152,12 +152,6 @@ func (a *Agent) ObserveCluster() error {
 		return fmt.Errorf("failed to create metrics client: %v", err)
 	}
 
-	// Collect namespaces (always needed for resource organization)
-	nsList, err := a.k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to list namespaces: %v", err)
-	}
-
 	// Initialize cluster state
 	var nodes []types.Node
 	var resources = make(map[string]types.ResourceList)
@@ -168,6 +162,13 @@ func (a *Agent) ObserveCluster() error {
 		if err != nil {
 			return fmt.Errorf("failed to collect nodes: %v", err)
 		}
+	}
+
+	// Collect namespaces (always needed for resource organization)
+	// TODO: This is a hack to get the namespaces. We should use the API to get the namespaces.
+	nsList, err := a.k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list namespaces: %v", err)
 	}
 
 	// Collect resource data per namespace

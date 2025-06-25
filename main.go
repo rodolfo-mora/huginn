@@ -66,7 +66,7 @@ func main() {
 
 			// Print results
 			a.PrintAnomalies(anomalies)
-			a.PrintState()
+			// a.PrintState()
 		}
 	}
 

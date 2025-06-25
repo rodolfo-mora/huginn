@@ -1,0 +1,313 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Valkyrie Comprehensive Monitoring",
+    "tags": ["valkyrie", "anomaly-detection", "kubernetes", "monitoring"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Node CPU Usage (%)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_cpu_usage_percent",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "Node Memory Usage (%)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_memory_usage_percent",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Node CPU Raw Usage (cores)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_cpu_raw",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Node Memory Raw Usage (GB)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_memory_raw / 1024 / 1024 / 1024",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "Node CPU Capacity (cores)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "valkyrie_node_cpu_capacity",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "Node Memory Capacity (GB)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "valkyrie_node_memory_capacity / 1024 / 1024 / 1024",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 16
+        }
+      },
+      {
+        "id": 7,
+        "title": "CPU Usage vs Capacity Ratio",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_cpu_raw / valkyrie_node_cpu_capacity * 100",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 20
+        }
+      },
+      {
+        "id": 8,
+        "title": "Memory Usage vs Capacity Ratio",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_memory_raw / valkyrie_node_memory_capacity * 100",
+            "legendFormat": "{{node}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 20
+        }
+      },
+      {
+        "id": 9,
+        "title": "CPU Statistics (Mean, EWMA, StdDev)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_cpu_mean_percent",
+            "legendFormat": "{{node}} - Mean"
+          },
+          {
+            "expr": "valkyrie_node_cpu_ewma_percent",
+            "legendFormat": "{{node}} - EWMA"
+          },
+          {
+            "expr": "valkyrie_node_cpu_stddev_percent",
+            "legendFormat": "{{node}} - StdDev"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 28
+        }
+      },
+      {
+        "id": 10,
+        "title": "Memory Statistics (Mean, EWMA, StdDev)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_node_memory_mean_percent",
+            "legendFormat": "{{node}} - Mean"
+          },
+          {
+            "expr": "valkyrie_node_memory_ewma_percent",
+            "legendFormat": "{{node}} - EWMA"
+          },
+          {
+            "expr": "valkyrie_node_memory_stddev_percent",
+            "legendFormat": "{{node}} - StdDev"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 28
+        }
+      },
+      {
+        "id": 11,
+        "title": "Pod Restart Count",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "valkyrie_pod_restart_count",
+            "format": "table",
+            "instant": true
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 36
+        }
+      },
+      {
+        "id": 12,
+        "title": "Pod Restart Statistics",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "valkyrie_pod_restart_mean",
+            "legendFormat": "{{pod}} ({{namespace}}) - Mean"
+          },
+          {
+            "expr": "valkyrie_pod_restart_ewma",
+            "legendFormat": "{{pod}} ({{namespace}}) - EWMA"
+          },
+          {
+            "expr": "valkyrie_pod_restart_stddev",
+            "legendFormat": "{{pod}} ({{namespace}}) - StdDev"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 36
+        }
+      },
+      {
+        "id": 13,
+        "title": "Anomalies Detected (Last Hour)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(valkyrie_anomaly_detected_total[1h])",
+            "legendFormat": "{{type}} - {{resource}}"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 44
+        }
+      },
+      {
+        "id": 14,
+        "title": "Anomaly Severity Score",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "valkyrie_anomaly_severity_score",
+            "legendFormat": "{{type}} - {{resource}}"
+          }
+        ],
+        "gridPos": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 44
+        }
+      },
+      {
+        "id": 15,
+        "title": "Anomaly Rate (per second)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(valkyrie_anomaly_detected_total[5m])",
+            "legendFormat": "{{type}} - {{resource}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 48
+        }
+      },
+      {
+        "id": 16,
+        "title": "Anomalies by Type",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (type) (increase(valkyrie_anomaly_detected_total[1h]))",
+            "legendFormat": "{{type}}"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 48
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+} 
