@@ -70,4 +70,7 @@ embedding:
     model: text-embedding-ada-002
   sentenceTransformers:
     model: all-MiniLM-L6-v2
-    device: cpu 
+    device: cpu
+  ollama:
+    url: http://localhost:11434
+    model: nomic-embed-text

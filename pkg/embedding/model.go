@@ -1,8 +1,13 @@
 package embedding
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"hash/fnv"
 	"math"
+	"net/http"
+	"time"
 )
 
 // Model defines the interface for embedding models
@@ -87,4 +92,65 @@ func (m *SentenceTransformersModel) Encode(text string) ([]float32, error) {
 	// For now, use the simple model as a fallback
 	simpleModel := NewSimpleModel(m.dimension)
 	return simpleModel.Encode(text)
+}
+
+// OllamaModel implements an Ollama-based embedding model
+type OllamaModel struct {
+	url       string
+	model     string
+	dimension int
+	client    *http.Client
+}
+
+// NewOllamaModel creates a new Ollama embedding model
+func NewOllamaModel(url, model string, dimension int) *OllamaModel {
+	return &OllamaModel{
+		url:       url,
+		model:     model,
+		dimension: dimension,
+		client: &http.Client{
+			Timeout: 30 * time.Second,
+		},
+	}
+}
+
+// Encode implements the Model interface
+func (m *OllamaModel) Encode(text string) ([]float32, error) {
+	// Prepare the request payload
+	payload := map[string]interface{}{
+		"model":  m.model,
+		"prompt": text,
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request payload: %v", err)
+	}
+
+	// Make the API request
+	resp, err := m.client.Post(m.url+"/api/embeddings", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to make Ollama API request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("Ollama API returned status %d", resp.StatusCode)
+	}
+
+	// Parse the response
+	var response struct {
+		Embedding []float32 `json:"embedding"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return nil, fmt.Errorf("failed to decode Ollama API response: %v", err)
+	}
+
+	// Validate embedding dimension
+	if len(response.Embedding) != m.dimension {
+		return nil, fmt.Errorf("expected embedding dimension %d, got %d", m.dimension, len(response.Embedding))
+	}
+
+	return response.Embedding, nil
 }

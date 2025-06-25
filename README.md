@@ -7,7 +7,7 @@ Valkyrie is an intelligent Kubernetes monitoring agent that uses reinforcement l
 - **Anomaly Detection**: Detects anomalies in CPU usage, memory usage, pod restarts, and pod status
 - **Vector Storage**: Stores and searches similar anomalies using vector embeddings
 - **Multiple Storage Backends**: Supports both Qdrant and Redis for vector storage
-- **Embedding Models**: Supports multiple embedding models (Simple, OpenAI, Sentence Transformers)
+- **Embedding Models**: Supports multiple embedding models (Simple, OpenAI, Sentence Transformers, Ollama)
 - **Notification System**: Supports multiple notification channels (Slack, Email, Webhook, Alertmanager)
 - **Configurable Thresholds**: Customize detection thresholds and history size
 - **Kubernetes Integration**: Monitors pods, deployments, services, and nodes
@@ -77,7 +77,7 @@ anomalyDetection:
 
 # Embedding configuration
 embedding:
-  type: simple  # or openai, sentence-transformers
+  type: ollama  # or simple, openai, sentence-transformers
   dimension: 384
   openai:
     apiKey: ""
@@ -85,6 +85,9 @@ embedding:
   sentenceTransformers:
     model: all-MiniLM-L6-v2
     device: cpu
+  ollama:
+    url: http://localhost:11434
+    model: nomic-embed-text
 ```
 
 ## Installation
@@ -121,6 +124,8 @@ go build -o valkyrie
 - Go 1.21 or later
 - Kubernetes cluster (or minikube for local development)
 - Qdrant or Redis for vector storage
+- (Optional) OpenAI API key for OpenAI embeddings
+- (Optional) Ollama server for Ollama embeddings (see https://ollama.com/)
 
 ### Building
 

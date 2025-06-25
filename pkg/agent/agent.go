@@ -94,6 +94,8 @@ func NewAgent(cfg *config.Config) (*Agent, error) {
 		model = embedding.NewOpenAIModel(cfg.Embedding.OpenAI.APIKey, cfg.Embedding.OpenAI.Model, cfg.Embedding.Dimension)
 	case "sentence-transformers":
 		model = embedding.NewSentenceTransformersModel(cfg.Embedding.SentenceTransformers.Model, cfg.Embedding.SentenceTransformers.Device, cfg.Embedding.Dimension)
+	case "ollama":
+		model = embedding.NewOllamaModel(cfg.Embedding.Ollama.URL, cfg.Embedding.Ollama.Model, cfg.Embedding.Dimension)
 	default:
 		return nil, fmt.Errorf("unsupported embedding type: %s", cfg.Embedding.Type)
 	}

@@ -63,6 +63,7 @@ type EmbeddingConfig struct {
 	Dimension            int                        `yaml:"dimension"`
 	OpenAI               OpenAIConfig               `yaml:"openai"`
 	SentenceTransformers SentenceTransformersConfig `yaml:"sentenceTransformers"`
+	Ollama               OllamaConfig               `yaml:"ollama"`
 }
 
 // OpenAIConfig represents OpenAI-specific configuration
@@ -75,6 +76,12 @@ type OpenAIConfig struct {
 type SentenceTransformersConfig struct {
 	Model  string `yaml:"model"`
 	Device string `yaml:"device"`
+}
+
+// OllamaConfig represents Ollama-specific configuration
+type OllamaConfig struct {
+	URL   string `yaml:"url"`
+	Model string `yaml:"model"`
 }
 
 // NotificationConfig represents notification configuration
@@ -181,5 +188,13 @@ func setDefaults(config *Config) {
 	}
 	if config.Embedding.Dimension == 0 {
 		config.Embedding.Dimension = 384
+	}
+
+	// Ollama defaults
+	if config.Embedding.Ollama.URL == "" {
+		config.Embedding.Ollama.URL = "http://localhost:11434"
+	}
+	if config.Embedding.Ollama.Model == "" {
+		config.Embedding.Ollama.Model = "nomic-embed-text"
 	}
 }

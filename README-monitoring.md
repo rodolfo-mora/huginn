@@ -190,13 +190,44 @@ valkyrie_node_cpu_raw * 1000
 
 ## Dashboard Features
 
-The pre-configured Grafana dashboard includes:
-- **Node CPU Usage** - Real-time CPU usage graphs
-- **Node Memory Usage** - Real-time memory usage graphs
-- **Anomalies Detected** - Statistics on detected anomalies
-- **Pod Restart Count** - Table view of pod restart counts
-- **CPU Statistics** - Mean and EWMA comparison
-- **Alert Status** - Current alert states
+The pre-configured Grafana dashboards include:
+
+### Valkyrie Comprehensive Monitoring Dashboard
+A comprehensive dashboard (`valkyrie-comprehensive-dashboard.json`) that displays all metrics from the Prometheus exporter:
+
+#### Node Metrics Section:
+- **CPU Usage (%)** - Real-time CPU usage percentage graphs with thresholds
+- **Memory Usage (%)** - Real-time memory usage percentage graphs with thresholds
+- **CPU Raw Usage (cores)** - Raw CPU usage in cores (e.g., 1.5 cores)
+- **Memory Raw Usage (GB)** - Raw memory usage converted to GB
+- **CPU/Memory Capacity** - Static capacity information for each node
+- **Usage vs Capacity Ratio** - Calculated ratios showing utilization
+- **CPU/Memory Statistics** - Mean, EWMA, and Standard Deviation trends
+
+#### Pod Metrics Section:
+- **Pod Restart Count** - Table view of current restart counts with color coding
+- **Pod Restart Statistics** - Historical trends of restart statistics
+
+#### Anomaly Detection Section:
+- **Anomalies Detected** - Count of anomalies in the last hour
+- **Anomaly Severity Score** - Current severity scores (1=low, 2=medium, 3=high)
+- **Anomaly Rate** - Rate of anomalies per second over time
+- **Anomalies by Type** - Pie chart showing distribution by anomaly type
+
+#### Interactive Features:
+- **Node Filter** - Filter metrics by specific nodes
+- **Namespace Filter** - Filter pod metrics by namespace
+- **Auto-refresh** - Dashboard refreshes every 30 seconds
+- **Threshold Alerts** - Color-coded thresholds for quick visual identification
+
+### Valkyrie Basic Dashboard
+A simpler dashboard (`valkyrie-dashboard.json`) with essential metrics for quick overview.
+
+### Dashboard Configuration
+- **Time Range**: Default 1 hour, adjustable
+- **Refresh Rate**: 30 seconds
+- **Theme**: Dark mode
+- **Units**: Appropriate units for each metric type (%, GB, cores, etc.)
 
 ## Troubleshooting
 
