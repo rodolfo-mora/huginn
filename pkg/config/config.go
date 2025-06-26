@@ -34,6 +34,7 @@ type AnomalyDetectionConfig struct {
 	CPUAlpha            float64 `yaml:"cpuAlpha"`
 	MemoryAlpha         float64 `yaml:"memoryAlpha"`
 	RestartAlpha        float64 `yaml:"restartAlpha"`
+	MinStdDev           float64 `yaml:"minStdDev"`
 }
 
 // StorageConfig represents storage configuration
@@ -194,6 +195,11 @@ func setDefaults(config *Config) {
 	}
 	if config.AnomalyDetection.RestartAlpha == 0 {
 		config.AnomalyDetection.RestartAlpha = 0.3
+	}
+
+	// Minimum standard deviation default
+	if config.AnomalyDetection.MinStdDev == 0 {
+		config.AnomalyDetection.MinStdDev = 1.0
 	}
 
 	// Embedding defaults

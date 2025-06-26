@@ -96,6 +96,13 @@ The anomaly detection uses Exponential Weighted Moving Average (EWMA) with confi
 - **Lower alpha (0.1-0.3)**: Slower reaction, more smoothing, less noise
 - **Default alpha (0.3)**: Balanced approach for most monitoring scenarios
 
+### Statistical Analysis Configuration
+
+The system includes configurable parameters for statistical analysis:
+- **minStdDev**: Minimum standard deviation required for statistical analysis (default: 1.0%)
+- **Minimum history**: Requires 5 observations before statistical analysis
+- **EWMA deviation**: Minimum 5% deviation from trend to trigger anomaly
+
 ### Data Flow
 
 1. **Observation** (30s intervals): Kubernetes → Agent

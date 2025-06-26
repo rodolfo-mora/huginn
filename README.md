@@ -77,6 +77,7 @@ anomalyDetection:
   cpuAlpha: 0.3      # EWMA smoothing factor for CPU (0.1-0.8)
   memoryAlpha: 0.3   # EWMA smoothing factor for Memory (0.1-0.8)
   restartAlpha: 0.3  # EWMA smoothing factor for Pod Restarts (0.1-0.8)
+  minStdDev: 1.0     # Minimum standard deviation for statistical analysis (0.5-5.0)
 
 # Embedding configuration
 embedding:

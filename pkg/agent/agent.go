@@ -63,6 +63,8 @@ func NewAgent(cfg *config.Config) (*Agent, error) {
 		cfg.AnomalyDetection.CPUAlpha,
 		cfg.AnomalyDetection.MemoryAlpha,
 		cfg.AnomalyDetection.RestartAlpha,
+		false, // debug mode - set to true to enable detailed logging
+		cfg.AnomalyDetection.MinStdDev,
 	)
 
 	// Create Prometheus metrics exporter

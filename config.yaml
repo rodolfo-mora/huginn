@@ -61,15 +61,27 @@ agent:
     memory: 80.0
     podRestarts: 3
 
+
+
+# EWMA alpha tuning guidelines:
+#   - alpha controls how much weight is given to the most recent value in EWMA.
+#   - alpha close to 1: EWMA reacts quickly to recent changes (less smoothing, more sensitive).
+#   - alpha close to 0: EWMA reacts slowly, smoothing out short-term fluctuations (more smoothing, less sensitive).
+#   - For noisy data, use a lower alpha (e.g., 0.1–0.3) to smooth out spikes.
+#   - For rapid change detection, use a higher alpha (e.g., 0.5–0.8).
+#   - Typical values: 0.2–0.4 for most monitoring scenarios.
+#   - Try different values and plot the results to see what works best for your use case.
+
 # Anomaly detection configuration
 anomalyDetection:
   cpuThreshold: 80.0
   memoryThreshold: 80.0
   podRestartThreshold: 3
   maxHistorySize: 1000
-  cpuAlpha: 0.3
-  memoryAlpha: 0.3
-  restartAlpha: 0.3
+  cpuAlpha: 0.015
+  memoryAlpha: 0.015
+  restartAlpha: 0.015
+  minStdDev: 5.0  # Minimum standard deviation required for statistical analysis
 
 # Embedding configuration
 embedding:

@@ -15,6 +15,8 @@ type Detector struct {
 	podRestarts     int
 	history         []MetricObservation
 	maxHistorySize  int
+	debug           bool
+	minStdDev       float64
 	// Statistical measures
 	cpuStats     *MetricStats
 	memoryStats  *MetricStats
@@ -48,12 +50,14 @@ type MetricStats struct {
 //   - For rapid change detection, use a higher alpha (e.g., 0.5–0.8).
 //   - Typical values: 0.2–0.4 for most monitoring scenarios.
 //   - Try different values and plot the results to see what works best for your use case.
-func NewDetector(cpuThreshold, memoryThreshold float64, podRestarts int, maxHistorySize int, cpuAlpha, memoryAlpha, restartAlpha float64) *Detector {
+func NewDetector(cpuThreshold, memoryThreshold float64, podRestarts int, maxHistorySize int, cpuAlpha, memoryAlpha, restartAlpha float64, debug bool, minStdDev float64) *Detector {
 	return &Detector{
 		cpuThreshold:    cpuThreshold,
 		memoryThreshold: memoryThreshold,
 		podRestarts:     podRestarts,
 		maxHistorySize:  maxHistorySize,
+		debug:           debug,
+		minStdDev:       minStdDev,
 		cpuStats: &MetricStats{
 			alpha: cpuAlpha,
 		},
@@ -176,12 +180,26 @@ func (d *Detector) ComputeStats(values []float64, alpha float64) (mean, stddev, 
 }
 
 // isAnomalyHistory checks if a value is anomalous based on history-based stats
-func isAnomalyHistory(value, mean, stddev, ewma, threshold float64) bool {
-	if stddev == 0 {
+func isAnomalyHistory(value, mean, stddev, ewma, threshold, minStdDev float64) bool {
+	// Require minimum standard deviation to avoid false positives from tiny variations
+
+	// If we don't have enough data or stddev is too small, only check threshold
+	if stddev < minStdDev {
 		return value > threshold
 	}
+
+	// Calculate z-score
 	zScore := math.Abs((value - mean) / stddev)
-	return zScore > 3 || value > threshold || math.Abs(value-ewma) > 2*stddev
+
+	// Check EWMA deviation with minimum threshold to avoid noise
+	minEwmaDeviation := 5.0 // Minimum 5% deviation from EWMA for percentage values
+	ewmaDeviation := math.Abs(value - ewma)
+
+	// Anomaly conditions:
+	// 1. Z-score > 3 (statistical outlier)
+	// 2. Value > threshold (absolute threshold)
+	// 3. EWMA deviation > max(2*stddev, minEwmaDeviation) (significant change from trend)
+	return zScore > 3 || value > threshold || ewmaDeviation > math.Max(2*stddev, minEwmaDeviation)
 }
 
 // DetectAnomalies checks for anomalies in the current state using history-based stats
@@ -198,8 +216,29 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		d.recordObservation("node", node.Name, "memory", memoryUsagePercent)
 
 		cpuVals := d.GetMetricHistory("node", node.Name, "cpu")
+		// Require minimum history for statistical analysis
+		if len(cpuVals) < 5 {
+			// With insufficient history, only check absolute threshold
+			if cpuUsagePercent > d.cpuThreshold {
+				anomalies = append(anomalies, types.Anomaly{
+					Type:     "HighCPUUsage",
+					Resource: node.Name,
+					Severity: "High",
+					Description: fmt.Sprintf("CPU usage is %.2f%% (insufficient history for statistical analysis)",
+						cpuUsagePercent),
+					Value:     cpuUsagePercent,
+					Threshold: d.cpuThreshold,
+					Timestamp: time.Now(),
+				})
+			}
+			continue
+		}
+
 		cpuMean, cpuStd, cpuEwma := d.ComputeStats(cpuVals, d.cpuStats.alpha)
-		if isAnomalyHistory(cpuUsagePercent, cpuMean, cpuStd, cpuEwma, d.cpuThreshold) {
+		if d.debug {
+			d.DebugAnomalyCheck("node", node.Name, "cpu", cpuUsagePercent, d.cpuThreshold)
+		}
+		if isAnomalyHistory(cpuUsagePercent, cpuMean, cpuStd, cpuEwma, d.cpuThreshold, d.minStdDev) {
 			anomalies = append(anomalies, types.Anomaly{
 				Type:     "HighCPUUsage",
 				Resource: node.Name,
@@ -213,8 +252,29 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		}
 
 		memoryVals := d.GetMetricHistory("node", node.Name, "memory")
+		// Require minimum history for statistical analysis
+		if len(memoryVals) < 5 {
+			// With insufficient history, only check absolute threshold
+			if memoryUsagePercent > d.memoryThreshold {
+				anomalies = append(anomalies, types.Anomaly{
+					Type:     "HighMemoryUsage",
+					Resource: node.Name,
+					Severity: "High",
+					Description: fmt.Sprintf("Memory usage is %.2f%% (insufficient history for statistical analysis)",
+						memoryUsagePercent),
+					Value:     memoryUsagePercent,
+					Threshold: d.memoryThreshold,
+					Timestamp: time.Now(),
+				})
+			}
+			continue
+		}
+
 		memMean, memStd, memEwma := d.ComputeStats(memoryVals, d.memoryStats.alpha)
-		if isAnomalyHistory(memoryUsagePercent, memMean, memStd, memEwma, d.memoryThreshold) {
+		if d.debug {
+			d.DebugAnomalyCheck("node", node.Name, "memory", memoryUsagePercent, d.memoryThreshold)
+		}
+		if isAnomalyHistory(memoryUsagePercent, memMean, memStd, memEwma, d.memoryThreshold, d.minStdDev) {
 			anomalies = append(anomalies, types.Anomaly{
 				Type:     "HighMemoryUsage",
 				Resource: node.Name,
@@ -234,8 +294,28 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 			restartCount := float64(pod.RestartCount)
 			d.recordObservation("pod", pod.Name, "restarts", restartCount)
 			restartVals := d.GetMetricHistory("pod", pod.Name, "restarts")
+
+			// Require minimum history for statistical analysis
+			if len(restartVals) < 3 {
+				// With insufficient history, only check absolute threshold
+				if restartCount > float64(d.podRestarts) {
+					anomalies = append(anomalies, types.Anomaly{
+						Type:      "HighPodRestarts",
+						Resource:  pod.Name,
+						Namespace: ns,
+						Severity:  "Medium",
+						Description: fmt.Sprintf("Pod has restarted %d times (insufficient history for statistical analysis)",
+							pod.RestartCount),
+						Value:     restartCount,
+						Threshold: float64(d.podRestarts),
+						Timestamp: time.Now(),
+					})
+				}
+				continue
+			}
+
 			rMean, rStd, rEwma := d.ComputeStats(restartVals, d.restartStats.alpha)
-			if isAnomalyHistory(restartCount, rMean, rStd, rEwma, float64(d.podRestarts)) {
+			if isAnomalyHistory(restartCount, rMean, rStd, rEwma, float64(d.podRestarts), d.minStdDev) {
 				anomalies = append(anomalies, types.Anomaly{
 					Type:      "HighPodRestarts",
 					Resource:  pod.Name,
@@ -273,4 +353,57 @@ func parseResourceValue(value string) float64 {
 		return 0
 	}
 	return numeric
+}
+
+// DebugAnomalyCheck provides detailed information about anomaly detection decisions
+func (d *Detector) DebugAnomalyCheck(resourceType, resourceID, metricType string, currentValue, threshold float64) {
+	history := d.GetMetricHistory(resourceType, resourceID, metricType)
+
+	fmt.Printf("=== Anomaly Debug for %s/%s %s ===\n", resourceType, resourceID, metricType)
+	fmt.Printf("Current value: %.2f\n", currentValue)
+	fmt.Printf("Threshold: %.2f\n", threshold)
+	fmt.Printf("History length: %d\n", len(history))
+
+	if len(history) < 5 {
+		fmt.Printf("Insufficient history (< 5 observations), only checking threshold\n")
+		return
+	}
+
+	mean, stddev, ewma := d.ComputeStats(history, d.getAlphaForMetric(metricType))
+	fmt.Printf("Mean: %.2f\n", mean)
+	fmt.Printf("StdDev: %.2f\n", stddev)
+	fmt.Printf("EWMA: %.2f\n", ewma)
+
+	zScore := math.Abs((currentValue - mean) / stddev)
+	ewmaDeviation := math.Abs(currentValue - ewma)
+	minEwmaDeviation := 5.0
+
+	fmt.Printf("Z-Score: %.2f (threshold: 3.0)\n", zScore)
+	fmt.Printf("EWMA Deviation: %.2f (threshold: %.2f)\n", ewmaDeviation, math.Max(2*stddev, minEwmaDeviation))
+	fmt.Printf("StdDev check: %.2f >= %.2f = %t\n", stddev, d.minStdDev, stddev >= d.minStdDev)
+
+	// Check each condition
+	condition1 := zScore > 3
+	condition2 := currentValue > threshold
+	condition3 := ewmaDeviation > math.Max(2*stddev, minEwmaDeviation)
+
+	fmt.Printf("Condition 1 (Z-Score > 3): %t\n", condition1)
+	fmt.Printf("Condition 2 (Value > Threshold): %t\n", condition2)
+	fmt.Printf("Condition 3 (EWMA Deviation): %t\n", condition3)
+	fmt.Printf("Final result: %t\n", condition1 || condition2 || condition3)
+	fmt.Printf("================================\n")
+}
+
+// getAlphaForMetric returns the appropriate alpha value for a metric type
+func (d *Detector) getAlphaForMetric(metricType string) float64 {
+	switch metricType {
+	case "cpu":
+		return d.cpuStats.alpha
+	case "memory":
+		return d.memoryStats.alpha
+	case "restarts":
+		return d.restartStats.alpha
+	default:
+		return 0.3
+	}
 }
