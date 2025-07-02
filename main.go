@@ -15,6 +15,8 @@ import (
 func main() {
 	// Parse command line flags
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
+	printAnomalies := flag.Bool("print-anomalies", false, "Print detected anomalies")
+	printState := flag.Bool("print-state", false, "Print cluster state")
 	flag.Parse()
 
 	// Load configuration
@@ -64,10 +66,13 @@ func main() {
 				continue
 			}
 
-			// Print results
-			a.PrintAnomalies(anomalies)
-			// a.PrintState()
+			// Print results based on flags
+			if *printAnomalies {
+				a.PrintAnomalies(anomalies)
+			}
+			if *printState {
+				a.PrintState()
+			}
 		}
 	}
-
 }

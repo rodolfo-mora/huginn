@@ -23,6 +23,7 @@ type Node struct {
 	Condition          string
 	ConditionStatus    string
 	Status             string
+	Namespaces         []string // Namespaces running on this node
 }
 
 // ResourceList represents a list of resources in a namespace

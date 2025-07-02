@@ -81,7 +81,7 @@ anomalyDetection:
   cpuAlpha: 0.015
   memoryAlpha: 0.015
   restartAlpha: 0.015
-  minStdDev: 5.0  # Minimum standard deviation required for statistical analysis
+  minStdDev: 10.0  # Minimum standard deviation required for statistical analysis
 
 # Embedding configuration
 embedding:

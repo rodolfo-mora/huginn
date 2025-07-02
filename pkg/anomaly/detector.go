@@ -3,6 +3,7 @@ package anomaly
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/rodgon/valkyrie/pkg/types"
@@ -215,6 +216,12 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		d.recordObservation("node", node.Name, "cpu", cpuUsagePercent)
 		d.recordObservation("node", node.Name, "memory", memoryUsagePercent)
 
+		// Build namespace information for anomaly descriptions
+		namespacesInfo := ""
+		if len(node.Namespaces) > 0 {
+			namespacesInfo = fmt.Sprintf(" (namespaces: %s)", strings.Join(node.Namespaces, ", "))
+		}
+
 		cpuVals := d.GetMetricHistory("node", node.Name, "cpu")
 		// Require minimum history for statistical analysis
 		if len(cpuVals) < 5 {
@@ -224,8 +231,8 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 					Type:     "HighCPUUsage",
 					Resource: node.Name,
 					Severity: "High",
-					Description: fmt.Sprintf("CPU usage is %.2f%% (insufficient history for statistical analysis)",
-						cpuUsagePercent),
+					Description: fmt.Sprintf("CPU usage is %.2f%% (insufficient history for statistical analysis)%s",
+						cpuUsagePercent, namespacesInfo),
 					Value:     cpuUsagePercent,
 					Threshold: d.cpuThreshold,
 					Timestamp: time.Now(),
@@ -243,8 +250,8 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 				Type:     "HighCPUUsage",
 				Resource: node.Name,
 				Severity: "High",
-				Description: fmt.Sprintf("CPU usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)",
-					cpuUsagePercent, cpuMean, cpuStd),
+				Description: fmt.Sprintf("CPU usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)%s",
+					cpuUsagePercent, cpuMean, cpuStd, namespacesInfo),
 				Value:     cpuUsagePercent,
 				Threshold: d.cpuThreshold,
 				Timestamp: time.Now(),
@@ -260,8 +267,8 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 					Type:     "HighMemoryUsage",
 					Resource: node.Name,
 					Severity: "High",
-					Description: fmt.Sprintf("Memory usage is %.2f%% (insufficient history for statistical analysis)",
-						memoryUsagePercent),
+					Description: fmt.Sprintf("Memory usage is %.2f%% (insufficient history for statistical analysis)%s",
+						memoryUsagePercent, namespacesInfo),
 					Value:     memoryUsagePercent,
 					Threshold: d.memoryThreshold,
 					Timestamp: time.Now(),
@@ -279,8 +286,8 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 				Type:     "HighMemoryUsage",
 				Resource: node.Name,
 				Severity: "High",
-				Description: fmt.Sprintf("Memory usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)",
-					memoryUsagePercent, memMean, memStd),
+				Description: fmt.Sprintf("Memory usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)%s",
+					memoryUsagePercent, memMean, memStd, namespacesInfo),
 				Value:     memoryUsagePercent,
 				Threshold: d.memoryThreshold,
 				Timestamp: time.Now(),

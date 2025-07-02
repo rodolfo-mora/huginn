@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -160,28 +161,41 @@ func (a *Agent) ObserveCluster() error {
 	var nodes []types.Node
 	var resources = make(map[string]types.ResourceList)
 
-	// Collect node data if configured
-	if a.shouldCollectResource("nodes") {
-		nodes, err = a.collectNodes(ctx, metricsClient)
-		if err != nil {
-			return fmt.Errorf("failed to collect nodes: %v", err)
-		}
-	}
-
 	// Collect namespaces (always needed for resource organization)
-	// TODO: This is a hack to get the namespaces. We should use the API to get the namespaces.
 	nsList, err := a.k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list namespaces: %v", err)
 	}
 
-	// Collect resource data per namespace
+	// Build node-to-namespaces mapping by collecting all pods first
+	// This is always done regardless of pod monitoring configuration
+	nodeNamespaces := make(map[string]map[string]bool) // node -> set of namespaces
+
+	// Always collect minimal pod information for node mapping
 	for _, ns := range nsList.Items {
+		// Get pods for node mapping (minimal collection)
+		podList, err := a.k8sClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{})
+		if err != nil {
+			log.Printf("Warning: failed to list pods in namespace %s: %v", ns.Name, err)
+			continue
+		}
+
+		// Build node-to-namespaces mapping from pods
+		for _, pod := range podList.Items {
+			if pod.Spec.NodeName != "" {
+				if nodeNamespaces[pod.Spec.NodeName] == nil {
+					nodeNamespaces[pod.Spec.NodeName] = make(map[string]bool)
+				}
+				nodeNamespaces[pod.Spec.NodeName][ns.Name] = true
+			}
+		}
+
+		// Collect full resource data per namespace if configured
 		resourceList := types.ResourceList{}
 
 		// Collect pods if configured
 		if a.shouldCollectResource("pods") {
-			pods, err := a.collectPods(ctx, ns.Name)
+			pods, _, err := a.collectPods(ctx, ns.Name)
 			if err != nil {
 				log.Printf("Warning: failed to collect pods in namespace %s: %v", ns.Name, err)
 			} else {
@@ -215,6 +229,24 @@ func (a *Agent) ObserveCluster() error {
 		}
 	}
 
+	// Convert nodeNamespaces map to the format expected by collectNodes
+	nodeNamespacesList := make(map[string][]string)
+	for nodeName, namespaceSet := range nodeNamespaces {
+		namespaces := make([]string, 0, len(namespaceSet))
+		for namespace := range namespaceSet {
+			namespaces = append(namespaces, namespace)
+		}
+		nodeNamespacesList[nodeName] = namespaces
+	}
+
+	// Collect node data if configured
+	if a.shouldCollectResource("nodes") {
+		nodes, err = a.collectNodes(ctx, metricsClient, nodeNamespacesList)
+		if err != nil {
+			return fmt.Errorf("failed to collect nodes: %v", err)
+		}
+	}
+
 	// Build namespace names list
 	nsNames := make([]string, 0, len(nsList.Items))
 	for _, ns := range nsList.Items {
@@ -230,7 +262,7 @@ func (a *Agent) ObserveCluster() error {
 }
 
 // collectNodes collects node data including metrics
-func (a *Agent) collectNodes(ctx context.Context, metricsClient *metricsv.Clientset) ([]types.Node, error) {
+func (a *Agent) collectNodes(ctx context.Context, metricsClient *metricsv.Clientset, nodeNamespaces map[string][]string) ([]types.Node, error) {
 	nodeList, err := a.k8sClient.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list nodes: %v", err)
@@ -266,6 +298,12 @@ func (a *Agent) collectNodes(ctx context.Context, metricsClient *metricsv.Client
 		cpuUsagePercent := calculateCPUPercentage(cpuUsage, cpuCapacity)
 		memoryUsagePercent := calculateMemoryPercentage(memoryUsage, memoryCapacity)
 
+		// Get namespaces running on this node
+		namespaces := nodeNamespaces[node.Name]
+		if namespaces == nil {
+			namespaces = []string{} // Ensure we have an empty slice instead of nil
+		}
+
 		nodes = append(nodes, types.Node{
 			Name:               node.Name,
 			CPUUsage:           cpuUsage,
@@ -277,6 +315,7 @@ func (a *Agent) collectNodes(ctx context.Context, metricsClient *metricsv.Client
 			Condition:          getNodeCondition(&node),
 			ConditionStatus:    getNodeConditionStatus(&node),
 			Status:             string(node.Status.Phase),
+			Namespaces:         namespaces,
 		})
 	}
 
@@ -371,13 +410,15 @@ func parseMemoryValue(memoryStr string) float64 {
 }
 
 // collectPods collects pod data for a specific namespace
-func (a *Agent) collectPods(ctx context.Context, namespace string) ([]types.Pod, error) {
+func (a *Agent) collectPods(ctx context.Context, namespace string) ([]types.Pod, map[string]string, error) {
 	podList, err := a.k8sClient.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list pods in namespace %s: %v", namespace, err)
+		return nil, nil, fmt.Errorf("failed to list pods in namespace %s: %v", namespace, err)
 	}
 
 	pods := make([]types.Pod, 0, len(podList.Items))
+	podToNode := make(map[string]string) // pod name -> node name
+
 	for _, pod := range podList.Items {
 		pods = append(pods, types.Pod{
 			Name:         pod.Name,
@@ -385,9 +426,14 @@ func (a *Agent) collectPods(ctx context.Context, namespace string) ([]types.Pod,
 			Status:       string(pod.Status.Phase),
 			RestartCount: getPodRestartCount(&pod),
 		})
+
+		// Store the node name for this pod
+		if pod.Spec.NodeName != "" {
+			podToNode[pod.Name] = pod.Spec.NodeName
+		}
 	}
 
-	return pods, nil
+	return pods, podToNode, nil
 }
 
 // collectServices collects service data for a specific namespace
@@ -563,8 +609,12 @@ func (a *Agent) PrintState() {
 	fmt.Printf("Namespaces: %v\n", a.state.Namespaces)
 	fmt.Printf("Nodes: %d\n", len(a.state.Nodes))
 	for _, node := range a.state.Nodes {
-		fmt.Printf("  - %s: CPU=%.2f%%, Memory=%.2f%%, Condition=%s, ConditionStatus=%s\n",
-			node.Name, node.CPUUsagePercent, node.MemoryUsagePercent, node.Condition, node.ConditionStatus)
+		namespacesStr := "none"
+		if len(node.Namespaces) > 0 {
+			namespacesStr = strings.Join(node.Namespaces, ", ")
+		}
+		fmt.Printf("  - %s: CPU=%.2f%%, Memory=%.2f%%, Condition=%s, ConditionStatus=%s, Namespaces=[%s]\n",
+			node.Name, node.CPUUsagePercent, node.MemoryUsagePercent, node.Condition, node.ConditionStatus, namespacesStr)
 	}
 }
 
