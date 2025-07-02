@@ -28,7 +28,6 @@ type MultiClusterAgent struct {
 	model          embedding.Model
 	metrics        *metrics.PrometheusExporter
 	metricsServer  *metrics.MetricsServer
-	mu             sync.RWMutex
 	ctx            context.Context
 	cancel         context.CancelFunc
 }
