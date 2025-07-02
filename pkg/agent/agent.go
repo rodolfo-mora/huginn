@@ -42,8 +42,14 @@ type Agent struct {
 
 // NewAgent creates a new agent instance
 func NewAgent(cfg *config.Config) (*Agent, error) {
+	// Use the first cluster config (single-cluster mode)
+	if len(cfg.Clusters) == 0 {
+		return nil, fmt.Errorf("no clusters defined in config")
+	}
+	clusterCfg := cfg.Clusters[0]
+
 	// Load kubeconfig
-	kubeconfig := cfg.Kubernetes.Kubeconfig
+	kubeconfig := clusterCfg.Kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build kubeconfig: %v", err)
@@ -147,6 +153,51 @@ func NewAgent(cfg *config.Config) (*Agent, error) {
 	}, nil
 }
 
+// NewAgentWithoutMetrics creates a new agent instance without metrics, storage, notifier, and model
+// These components will be set by the multi-cluster agent
+func NewAgentWithoutMetrics(cfg *config.Config) (*Agent, error) {
+	// Use the first cluster config (single-cluster mode)
+	if len(cfg.Clusters) == 0 {
+		return nil, fmt.Errorf("no clusters defined in config")
+	}
+	clusterCfg := cfg.Clusters[0]
+
+	// Load kubeconfig
+	kubeconfig := clusterCfg.Kubeconfig
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build kubeconfig: %v", err)
+	}
+
+	// Create Kubernetes client
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kubernetes client: %v", err)
+	}
+
+	// Create detector
+	detector := anomaly.NewDetector(
+		cfg.AnomalyDetection.CPUThreshold,
+		cfg.AnomalyDetection.MemoryThreshold,
+		cfg.AnomalyDetection.PodRestartThreshold,
+		cfg.AnomalyDetection.MaxHistorySize,
+		cfg.AnomalyDetection.CPUAlpha,
+		cfg.AnomalyDetection.MemoryAlpha,
+		cfg.AnomalyDetection.RestartAlpha,
+		false, // debug mode - set to true to enable detailed logging
+		cfg.AnomalyDetection.MinStdDev,
+	)
+
+	return &Agent{
+		k8sClient:    clientset,
+		restConfig:   config,
+		detector:     detector,
+		config:       cfg,
+		observations: make([]types.Observation, 0),
+		// Note: metrics, storage, notifier, model, and metricsServer will be set by the caller
+	}, nil
+}
+
 // ObserveCluster collects the current state of the cluster
 func (a *Agent) ObserveCluster() error {
 	ctx := context.Background()
@@ -160,11 +211,20 @@ func (a *Agent) ObserveCluster() error {
 	// Initialize cluster state
 	var nodes []types.Node
 	var resources = make(map[string]types.ResourceList)
+	var events []types.ClusterEvent
 
 	// Collect namespaces (always needed for resource organization)
 	nsList, err := a.k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list namespaces: %v", err)
+	}
+
+	// Collect cluster events if configured
+	if a.shouldCollectResource("events") {
+		events, err = a.collectEvents(ctx)
+		if err != nil {
+			log.Printf("Warning: failed to collect events: %v", err)
+		}
 	}
 
 	// Build node-to-namespaces mapping by collecting all pods first
@@ -257,6 +317,7 @@ func (a *Agent) ObserveCluster() error {
 		Namespaces: nsNames,
 		Nodes:      nodes,
 		Resources:  resources,
+		Events:     events,
 	}
 	return nil
 }
@@ -478,7 +539,10 @@ func (a *Agent) collectDeployments(ctx context.Context, namespace string) ([]typ
 
 // shouldCollectResource checks if a resource type should be collected based on configuration
 func (a *Agent) shouldCollectResource(resourceType string) bool {
-	for _, resource := range a.config.Kubernetes.Resources {
+	if len(a.config.Clusters) == 0 {
+		return false
+	}
+	for _, resource := range a.config.Clusters[0].Resources {
 		if resource == resourceType {
 			return true
 		}
@@ -547,18 +611,22 @@ func (a *Agent) Learn() error {
 
 // DetectAnomalies checks for anomalies in the current state
 func (a *Agent) DetectAnomalies() ([]types.Anomaly, error) {
-	// Update Prometheus metrics with current cluster state
-	a.metrics.UpdateMetrics(a.state)
+	// Update Prometheus metrics with current cluster state (if metrics exist)
+	if a.metrics != nil {
+		a.metrics.UpdateMetrics(a.state)
+	}
 
 	anomalies := a.detector.DetectAnomalies(a.state)
 
-	// Record anomalies in Prometheus
-	for _, anomaly := range anomalies {
-		a.metrics.RecordAnomaly(anomaly)
+	// Record anomalies in Prometheus (if metrics exist)
+	if a.metrics != nil {
+		for _, anomaly := range anomalies {
+			a.metrics.RecordAnomaly(anomaly)
+		}
 	}
 
-	// Store anomalies in vector database if enabled
-	if a.config.Storage.StoreAlerts {
+	// Store anomalies in vector database if enabled and storage exists
+	if a.config.Storage.StoreAlerts && a.storage != nil && a.model != nil {
 		for _, anomaly := range anomalies {
 			// Generate embedding for the anomaly
 			text := fmt.Sprintf("%s %s %s %s", anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.Description)
@@ -578,7 +646,7 @@ func (a *Agent) DetectAnomalies() ([]types.Anomaly, error) {
 	}
 
 	// Send notifications if severity is high enough and notifications are enabled
-	if a.config.Notification.Enabled {
+	if a.config.Notification.Enabled && a.notifier != nil {
 		for _, anomaly := range anomalies {
 			if shouldNotify(anomaly, a.config.Notification.MinSeverity) {
 				err := a.notifier.Notify(anomaly)
@@ -616,6 +684,22 @@ func (a *Agent) PrintState() {
 		fmt.Printf("  - %s: CPU=%.2f%%, Memory=%.2f%%, Condition=%s, ConditionStatus=%s, Namespaces=[%s]\n",
 			node.Name, node.CPUUsagePercent, node.MemoryUsagePercent, node.Condition, node.ConditionStatus, namespacesStr)
 	}
+
+	// Print events if any
+	if len(a.state.Events) > 0 {
+		fmt.Printf("Events: %d\n", len(a.state.Events))
+		// Show only the most recent events (last 10)
+		start := 0
+		if len(a.state.Events) > 10 {
+			start = len(a.state.Events) - 10
+		}
+		for _, event := range a.state.Events[start:] {
+			fmt.Printf("  - [%s] %s/%s: %s (count: %d)\n",
+				event.Severity, event.Namespace, event.Resource, event.Message, event.Count)
+		}
+	} else {
+		fmt.Printf("Events: 0\n")
+	}
 }
 
 // PrintAnomalies prints the detected anomalies
@@ -634,5 +718,90 @@ func (a *Agent) PrintAnomalies(anomalies []types.Anomaly) {
 
 // StartMetricsServer starts the Prometheus metrics server
 func (a *Agent) StartMetricsServer() {
-	a.metricsServer.StartAsync()
+	if a.metricsServer != nil {
+		a.metricsServer.StartAsync()
+	}
+}
+
+// collectEvents collects cluster events
+func (a *Agent) collectEvents(ctx context.Context) ([]types.ClusterEvent, error) {
+	// Get events from all namespaces
+	eventList, err := a.k8sClient.CoreV1().Events("").List(ctx, metav1.ListOptions{
+		Limit: 1000, // Limit to prevent overwhelming the system
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list events: %v", err)
+	}
+
+	events := make([]types.ClusterEvent, 0, len(eventList.Items))
+	for _, event := range eventList.Items {
+		// Convert Kubernetes event to our ClusterEvent type
+		clusterEvent := types.ClusterEvent{
+			Type:      event.Type,
+			Reason:    event.Reason,
+			Message:   event.Message,
+			Timestamp: event.LastTimestamp.Time,
+			Namespace: event.Namespace,
+			Resource:  event.InvolvedObject.Name,
+			Severity:  string(event.Type),
+			Count:     event.Count,
+		}
+		events = append(events, clusterEvent)
+	}
+
+	return events, nil
+}
+
+// PrintConfig prints the current configuration
+func (a *Agent) PrintConfig() {
+	if len(a.config.Clusters) == 0 {
+		fmt.Printf("No cluster configuration found\n")
+		return
+	}
+
+	cluster := a.config.Clusters[0]
+	fmt.Printf("Single Cluster Configuration:\n")
+	fmt.Printf("Cluster: %s (%s)\n", cluster.Name, cluster.ID)
+	fmt.Printf("Kubeconfig: %s\n", cluster.Kubeconfig)
+	if cluster.Context != "" {
+		fmt.Printf("Context: %s\n", cluster.Context)
+	}
+	if cluster.Namespace != "" {
+		fmt.Printf("Namespace: %s\n", cluster.Namespace)
+	} else {
+		fmt.Printf("Namespace: all\n")
+	}
+	fmt.Printf("Resources: %v\n", cluster.Resources)
+	if len(cluster.Labels) > 0 {
+		fmt.Printf("Labels: %v\n", cluster.Labels)
+	}
+
+	fmt.Printf("\nAnomaly Detection:\n")
+	fmt.Printf("  CPU Threshold: %.1f%%\n", a.config.AnomalyDetection.CPUThreshold)
+	fmt.Printf("  Memory Threshold: %.1f%%\n", a.config.AnomalyDetection.MemoryThreshold)
+	fmt.Printf("  Pod Restart Threshold: %d\n", a.config.AnomalyDetection.PodRestartThreshold)
+	fmt.Printf("  Max History Size: %d\n", a.config.AnomalyDetection.MaxHistorySize)
+
+	fmt.Printf("\nStorage:\n")
+	fmt.Printf("  Type: %s\n", a.config.Storage.Type)
+	fmt.Printf("  Store Alerts: %t\n", a.config.Storage.StoreAlerts)
+	if a.config.Storage.Type == "qdrant" {
+		fmt.Printf("  Qdrant URL: %s\n", a.config.Storage.Qdrant.URL)
+		fmt.Printf("  Collection: %s\n", a.config.Storage.Qdrant.Collection)
+	}
+
+	fmt.Printf("\nEmbedding:\n")
+	fmt.Printf("  Type: %s\n", a.config.Embedding.Type)
+	fmt.Printf("  Dimension: %d\n", a.config.Embedding.Dimension)
+	if a.config.Embedding.Type == "ollama" {
+		fmt.Printf("  Ollama URL: %s\n", a.config.Embedding.Ollama.URL)
+		fmt.Printf("  Model: %s\n", a.config.Embedding.Ollama.Model)
+	}
+
+	fmt.Printf("\nNotification:\n")
+	fmt.Printf("  Enabled: %t\n", a.config.Notification.Enabled)
+	if a.config.Notification.Enabled {
+		fmt.Printf("  Type: %s\n", a.config.Notification.Type)
+		fmt.Printf("  Min Severity: %s\n", a.config.Notification.MinSeverity)
+	}
 }

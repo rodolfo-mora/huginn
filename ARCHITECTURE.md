@@ -116,6 +116,7 @@ graph TB
 - **Pods**: Status, restart counts, node assignment
 - **Services**: Type and configuration
 - **Deployments**: Replica counts and status
+- **Events**: Cluster events with severity, reason, and message analysis
 - **Namespace Mapping**: Always collects namespace information for nodes regardless of pod monitoring
 
 #### 2. **Enhanced Anomaly Detection**
@@ -123,6 +124,7 @@ graph TB
 - **Configurable Alpha Values**: EWMA smoothing factors for different metrics
 - **Minimum History Requirements**: Ensures sufficient data before statistical analysis
 - **Namespace Context**: Anomaly descriptions include namespace information
+- **Event-Based Detection**: Identifies problematic cluster events (errors, warnings, specific failure types)
 
 #### 3. **Command Line Interface**
 - **Print Control Flags**: `-print-anomalies` and `-print-state` flags for output control
@@ -156,10 +158,11 @@ The system includes configurable parameters for statistical analysis:
 
 1. **Observation** (30s intervals): Kubernetes → Agent
 2. **Namespace Mapping**: Always collects pod-to-node mapping for namespace information
-3. **Learning**: Cluster State → Historical Observations
-4. **Detection**: State → Anomalies → Vector Storage
-5. **Notification**: Anomalies → External Channels
-6. **Metrics**: State → Prometheus → Grafana
+3. **Event Collection**: Gathers cluster events for anomaly detection and monitoring
+4. **Learning**: Cluster State → Historical Observations
+5. **Detection**: State → Anomalies → Vector Storage
+6. **Notification**: Anomalies → External Channels
+7. **Metrics**: State → Prometheus → Grafana
 
 ## Configuration
 
@@ -174,6 +177,7 @@ kubernetes:
     - pods       # Optional
     - services   # Optional
     - deployments # Optional
+    - events     # Optional - cluster events collection
 ```
 
 ### Anomaly Detection Configuration
@@ -295,6 +299,12 @@ cd scripts/ragcli
 - **Efficient Collection**: Minimal pod data collection for node-to-namespace mapping
 - **Enhanced Anomaly Context**: Anomaly descriptions include namespace information
 - **Improved State Reporting**: Node state includes namespace distribution
+
+### Event Collection Feature
+- **Cluster Events**: Collects Kubernetes events for comprehensive monitoring
+- **Event-Based Anomalies**: Detects problematic events (errors, warnings, specific failure types)
+- **Event Filtering**: Identifies recurring issues and specific problematic event reasons
+- **State Integration**: Events included in cluster state and anomaly detection
 
 ### Configuration Improvements
 - **Comprehensive Defaults**: All configuration sections have sensible defaults

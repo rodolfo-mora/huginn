@@ -10,14 +10,26 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Kubernetes       KubernetesConfig       `yaml:"kubernetes"`
+	Clusters         []ClusterConfig        `yaml:"clusters"`
 	AnomalyDetection AnomalyDetectionConfig `yaml:"anomalyDetection"`
 	Storage          StorageConfig          `yaml:"storage"`
 	Embedding        EmbeddingConfig        `yaml:"embedding"`
 	Notification     NotificationConfig     `yaml:"notification"`
 }
 
-// KubernetesConfig represents Kubernetes-specific configuration
+// ClusterConfig represents configuration for a single Kubernetes cluster
+type ClusterConfig struct {
+	Name       string            `yaml:"name"`
+	ID         string            `yaml:"id"`
+	Labels     map[string]string `yaml:"labels"`
+	Kubeconfig string            `yaml:"kubeconfig"`
+	Context    string            `yaml:"context"`
+	Namespace  string            `yaml:"namespace"`
+	Resources  []string          `yaml:"resources"`
+	Enabled    bool              `yaml:"enabled"`
+}
+
+// KubernetesConfig represents Kubernetes-specific configuration (deprecated, use ClusterConfig)
 type KubernetesConfig struct {
 	Kubeconfig string   `yaml:"kubeconfig"`
 	Context    string   `yaml:"context"`
@@ -149,9 +161,47 @@ func LoadConfig(path string) (*Config, error) {
 
 // setDefaults sets default values for configuration fields
 func setDefaults(config *Config) {
-	// Kubernetes defaults
-	if config.Kubernetes.Kubeconfig == "" {
-		config.Kubernetes.Kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+	// Handle backward compatibility - if no clusters defined, create default cluster
+	if len(config.Clusters) == 0 {
+		// Try to read from old kubernetes config if it exists
+		// This is for backward compatibility
+		config.Clusters = []ClusterConfig{
+			{
+				Name:       "default",
+				ID:         "default",
+				Kubeconfig: filepath.Join(os.Getenv("HOME"), ".kube", "config"),
+				Context:    "",
+				Namespace:  "",
+				Resources:  []string{"nodes", "events"},
+				Enabled:    true,
+				Labels:     make(map[string]string),
+			},
+		}
+	}
+
+	// Set defaults for each cluster
+	for i := range config.Clusters {
+		cluster := &config.Clusters[i]
+
+		// Set cluster defaults
+		if cluster.Kubeconfig == "" {
+			cluster.Kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
+		}
+		if cluster.Name == "" {
+			cluster.Name = fmt.Sprintf("cluster-%d", i)
+		}
+		if cluster.ID == "" {
+			cluster.ID = cluster.Name
+		}
+		if cluster.Labels == nil {
+			cluster.Labels = make(map[string]string)
+		}
+		if len(cluster.Resources) == 0 {
+			cluster.Resources = []string{"nodes", "events"}
+		}
+		if !cluster.Enabled {
+			cluster.Enabled = true
+		}
 	}
 
 	// Storage defaults
@@ -216,5 +266,23 @@ func setDefaults(config *Config) {
 	}
 	if config.Embedding.Ollama.Model == "" {
 		config.Embedding.Ollama.Model = "nomic-embed-text"
+	}
+
+	// OpenAI defaults
+	if config.Embedding.OpenAI.Model == "" {
+		config.Embedding.OpenAI.Model = "text-embedding-ada-002"
+	}
+
+	// Sentence Transformers defaults
+	if config.Embedding.SentenceTransformers.Model == "" {
+		config.Embedding.SentenceTransformers.Model = "all-MiniLM-L6-v2"
+	}
+	if config.Embedding.SentenceTransformers.Device == "" {
+		config.Embedding.SentenceTransformers.Device = "cpu"
+	}
+
+	// Notification defaults
+	if config.Notification.MinSeverity == "" {
+		config.Notification.MinSeverity = "warning"
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rodgon/valkyrie/pkg/types"
 )
 
@@ -20,43 +21,129 @@ type QdrantClient struct {
 
 // NewQdrantClient creates a new Qdrant client
 func NewQdrantClient(url, collection string) (*QdrantClient, error) {
-	return &QdrantClient{
+	client := &QdrantClient{
 		url:        url,
 		collection: collection,
 		client:     &http.Client{Timeout: 10 * time.Second},
-	}, nil
+	}
+
+	// Ensure collection exists
+	if err := client.ensureCollection(); err != nil {
+		return nil, fmt.Errorf("failed to ensure collection exists: %v", err)
+	}
+
+	return client, nil
+}
+
+// ensureCollection ensures the collection exists with proper configuration
+func (c *QdrantClient) ensureCollection() error {
+	// First, check if collection exists
+	url := fmt.Sprintf("%s/collections/%s", c.url, c.collection)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to check collection: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// If collection exists, we're done
+	if resp.StatusCode == http.StatusOK {
+		return nil
+	}
+
+	// If collection doesn't exist, create it
+	if resp.StatusCode == http.StatusNotFound {
+		return c.createCollection()
+	}
+
+	// Unexpected status code
+	body, _ := io.ReadAll(resp.Body)
+	return fmt.Errorf("unexpected status code %d when checking collection: %s", resp.StatusCode, string(body))
+}
+
+// createCollection creates a new collection with proper configuration
+func (c *QdrantClient) createCollection() error {
+	// Create collection configuration
+	config := map[string]interface{}{
+		"vectors": map[string]interface{}{
+			"size":     384, // Default vector size
+			"distance": "Cosine",
+		},
+	}
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal collection config: %v", err)
+	}
+
+	url := fmt.Sprintf("%s/collections/%s", c.url, c.collection)
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create collection: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to create collection, status %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
 }
 
 // StoreAlert stores an alert in Qdrant
 func (c *QdrantClient) StoreAlert(vector []float32, anomaly types.Anomaly) error {
-	// Create alert vector
-	alertVector := AlertVector{
-		ID:        fmt.Sprintf("%s-%s-%d", anomaly.Type, anomaly.Resource, time.Now().UnixNano()),
-		Vector:    vector,
-		Timestamp: time.Now(),
-		Payload: AlertVectorPayload{
-			Type:        anomaly.Type,
-			Resource:    anomaly.Resource,
-			Namespace:   anomaly.Namespace,
-			Severity:    anomaly.Severity,
-			Description: anomaly.Description,
-			Value:       anomaly.Value,
-			Threshold:   anomaly.Threshold,
-			Labels:      anomaly.Labels,
-			Events:      anomaly.Events,
-			Metadata:    anomaly.Metadata,
+	// Create the point payload in Qdrant format
+	point := map[string]interface{}{
+		"id":     uuid.New().String(),
+		"vector": vector,
+		"payload": map[string]interface{}{
+			"type":        anomaly.Type,
+			"resource":    anomaly.Resource,
+			"namespace":   anomaly.Namespace,
+			"severity":    anomaly.Severity,
+			"description": anomaly.Description,
+			"value":       anomaly.Value,
+			"threshold":   anomaly.Threshold,
+			"timestamp":   time.Now().Unix(),
 		},
 	}
 
+	// Add optional fields if they exist
+	if anomaly.Labels != nil {
+		point["payload"].(map[string]interface{})["labels"] = anomaly.Labels
+	}
+	if anomaly.Events != nil {
+		point["payload"].(map[string]interface{})["events"] = anomaly.Events
+	}
+	if anomaly.Metadata != nil {
+		point["payload"].(map[string]interface{})["metadata"] = anomaly.Metadata
+	}
+
+	// Create the upsert payload
+	upsertPayload := map[string]interface{}{
+		"points": []map[string]interface{}{point},
+	}
+
 	// Marshal to JSON
-	data, err := json.Marshal(alertVector)
+	data, err := json.Marshal(upsertPayload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal alert vector: %v", err)
+		return fmt.Errorf("failed to marshal upsert payload: %v", err)
 	}
 
 	// Send to Qdrant
 	url := fmt.Sprintf("%s/collections/%s/points", c.url, c.collection)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	req, err := http.NewRequest("PUT", url, bytes.NewBuffer(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
@@ -68,8 +155,9 @@ func (c *QdrantClient) StoreAlert(vector []float32, anomaly types.Anomaly) error
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Qdrant API returned non-200 status code: %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Qdrant API returned status code %d: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
@@ -77,20 +165,21 @@ func (c *QdrantClient) StoreAlert(vector []float32, anomaly types.Anomaly) error
 
 // SearchSimilarAlerts searches for similar alerts in Qdrant
 func (c *QdrantClient) SearchSimilarAlerts(vector []float32, limit int) ([]types.Anomaly, error) {
-	// Create search payload
-	payload := map[string]interface{}{
-		"vector": vector,
-		"limit":  limit,
+	// Create search payload in Qdrant format
+	searchPayload := map[string]interface{}{
+		"vector":       vector,
+		"limit":        limit,
+		"with_payload": true,
 	}
 
 	// Marshal to JSON
-	data, err := json.Marshal(payload)
+	data, err := json.Marshal(searchPayload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal search payload: %v", err)
 	}
 
 	// Send to Qdrant
-	url := fmt.Sprintf("%s/collections/%s/search", c.url, c.collection)
+	url := fmt.Sprintf("%s/collections/%s/points/search", c.url, c.collection)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
@@ -104,14 +193,15 @@ func (c *QdrantClient) SearchSimilarAlerts(vector []float32, limit int) ([]types
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Qdrant API returned non-200 status code: %d", resp.StatusCode)
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("Qdrant API returned status code %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Decode response
 	var result struct {
-		Results []struct {
-			Payload AlertVectorPayload `json:"payload"`
-		} `json:"results"`
+		Result []struct {
+			Payload map[string]interface{} `json:"payload"`
+		} `json:"result"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -119,23 +209,44 @@ func (c *QdrantClient) SearchSimilarAlerts(vector []float32, limit int) ([]types
 	}
 
 	// Convert to anomalies
-	anomalies := make([]types.Anomaly, len(result.Results))
-	for i, r := range result.Results {
-		anomalies[i] = types.Anomaly{
-			Type:        r.Payload.Type,
-			Resource:    r.Payload.Resource,
-			Namespace:   r.Payload.Namespace,
-			Severity:    r.Payload.Severity,
-			Description: r.Payload.Description,
-			Value:       r.Payload.Value,
-			Threshold:   r.Payload.Threshold,
-			Labels:      r.Payload.Labels,
-			Events:      r.Payload.Events,
-			Metadata:    r.Payload.Metadata,
+	anomalies := make([]types.Anomaly, len(result.Result))
+	for i, r := range result.Result {
+		payload := r.Payload
+
+		// Extract values from payload
+		anomaly := types.Anomaly{
+			Type:        getStringFromPayload(payload, "type"),
+			Resource:    getStringFromPayload(payload, "resource"),
+			Namespace:   getStringFromPayload(payload, "namespace"),
+			Severity:    getStringFromPayload(payload, "severity"),
+			Description: getStringFromPayload(payload, "description"),
 		}
+
+		// Extract numeric values
+		if value, ok := payload["value"].(float64); ok {
+			anomaly.Value = value
+		}
+		if threshold, ok := payload["threshold"].(float64); ok {
+			anomaly.Threshold = threshold
+		}
+
+		// Extract timestamp
+		if timestamp, ok := payload["timestamp"].(float64); ok {
+			anomaly.Timestamp = time.Unix(int64(timestamp), 0)
+		}
+
+		anomalies[i] = anomaly
 	}
 
 	return anomalies, nil
+}
+
+// getStringFromPayload safely extracts a string value from the payload
+func getStringFromPayload(payload map[string]interface{}, key string) string {
+	if value, ok := payload[key].(string); ok {
+		return value
+	}
+	return ""
 }
 
 // GetAlert implements the Storage interface

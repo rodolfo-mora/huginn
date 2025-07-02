@@ -17,6 +17,7 @@ func main() {
 	configPath := flag.String("config", "config.yaml", "Path to configuration file")
 	printAnomalies := flag.Bool("print-anomalies", false, "Print detected anomalies")
 	printState := flag.Bool("print-state", false, "Print cluster state")
+	printConfig := flag.Bool("print-config", false, "Print configuration")
 	flag.Parse()
 
 	// Load configuration
@@ -25,10 +26,17 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Create agent
-	a, err := agent.NewAgent(cfg)
+	// Create multi-cluster agent
+	multiAgent, err := agent.NewMultiClusterAgent(cfg)
 	if err != nil {
-		log.Fatalf("Failed to create agent: %v", err)
+		log.Fatalf("Failed to create multi-cluster agent: %v", err)
+	}
+	defer multiAgent.Stop()
+
+	// Print configuration if requested
+	if *printConfig {
+		multiAgent.PrintConfig()
+		return
 	}
 
 	// Set up signal handling
@@ -39,7 +47,9 @@ func main() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 
-	go a.StartMetricsServer() // Starts on :8080
+	go multiAgent.StartMetricsServer() // Starts on :8080
+
+	log.Printf("Multi-cluster agent started with %d clusters", len(cfg.Clusters))
 
 	for {
 		select {
@@ -47,20 +57,20 @@ func main() {
 			log.Println("Received shutdown signal")
 			return
 		case <-ticker.C:
-			// Observe cluster state
-			if err := a.ObserveCluster(); err != nil {
-				log.Printf("Error observing cluster: %v", err)
+			// Observe all clusters
+			if err := multiAgent.ObserveAllClusters(); err != nil {
+				log.Printf("Error observing clusters: %v", err)
 				continue
 			}
 
-			// Learn from observations
-			if err := a.Learn(); err != nil {
+			// Learn from observations across all clusters
+			if err := multiAgent.LearnFromAllClusters(); err != nil {
 				log.Printf("Error learning: %v", err)
 				continue
 			}
 
-			// Detect anomalies
-			anomalies, err := a.DetectAnomalies()
+			// Detect anomalies across all clusters
+			anomalies, err := multiAgent.DetectAllAnomalies()
 			if err != nil {
 				log.Printf("Error detecting anomalies: %v", err)
 				continue
@@ -68,10 +78,10 @@ func main() {
 
 			// Print results based on flags
 			if *printAnomalies {
-				a.PrintAnomalies(anomalies)
+				multiAgent.PrintAllAnomalies(anomalies)
 			}
 			if *printState {
-				a.PrintState()
+				multiAgent.PrintMultiClusterState()
 			}
 		}
 	}

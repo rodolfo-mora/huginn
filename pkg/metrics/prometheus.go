@@ -239,9 +239,15 @@ func (e *PrometheusExporter) createPodMetrics() {
 
 // isResourceEnabled checks if a resource type is enabled in configuration
 func (e *PrometheusExporter) isResourceEnabled(resourceType string) bool {
-	for _, resource := range e.config.Kubernetes.Resources {
-		if resource == resourceType {
-			return true
+	// Check if any cluster has this resource enabled
+	for _, cluster := range e.config.Clusters {
+		if !cluster.Enabled {
+			continue
+		}
+		for _, resource := range cluster.Resources {
+			if resource == resourceType {
+				return true
+			}
 		}
 	}
 	return false

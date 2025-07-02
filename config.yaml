@@ -1,19 +1,27 @@
-# Kubernetes configuration
+# Multi-Cluster Configuration Example
+# This configuration demonstrates how to monitor multiple Kubernetes clusters
 kubernetes:
-  # kubeconfig: /Users/rodgon/code/kubernetes-sandbox-credentials/sandbox.aws.kindredgroup.com/kubeconfig
-  kubeconfig: /Users/rodgon/code/kubernetes-configuration/k8s.amo.sre.kindredgroup.com/cluster-config/readonly_user.conf
-  context: "k8s.sandbox.kindredgroup.com"
-  namespace: ""
-  resources:
-    # - pods
-    # - deployments
-    # - services
-    - nodes
+  - name: "name"
+    id: "id"
+    labels:
+      environment: "test"
+      region: "eu-region-3"
+      team: "sre"
+    kubeconfig: 
+    context: ""
+    namespace: ""
+    resources:
+      # - pods
+      # - deployments
+      # - services
+      - nodes
+      - events
+    enabled: true
 
 # Storage configuration
 storage:
   type: qdrant
-  storeAlerts: false
+  storeAlerts: true
   qdrant:
     url: http://localhost:6333
     collection: alerts

@@ -1,0 +1,110 @@
+# Multi-Cluster Configuration Example
+# This configuration demonstrates how to monitor multiple Kubernetes clusters
+
+clusters:
+  # Production cluster
+  - name: "production"
+    id: "prod-cluster-1"
+    labels:
+      environment: "production"
+      region: "us-west-2"
+      team: "platform"
+    kubeconfig: "/path/to/prod-kubeconfig"
+    context: "prod-context"
+    namespace: ""
+    resources:
+      - "nodes"
+      - "events"
+      - "pods"
+      - "services"
+    enabled: true
+
+  # Staging cluster
+  - name: "staging"
+    id: "staging-cluster-1"
+    labels:
+      environment: "staging"
+      region: "us-west-2"
+      team: "platform"
+    kubeconfig: "/path/to/staging-kubeconfig"
+    context: "staging-context"
+    namespace: ""
+    resources:
+      - "nodes"
+      - "events"
+      - "pods"
+    enabled: true
+
+  # Development cluster
+  - name: "development"
+    id: "dev-cluster-1"
+    labels:
+      environment: "development"
+      region: "us-east-1"
+      team: "platform"
+    kubeconfig: "/path/to/dev-kubeconfig"
+    context: "dev-context"
+    namespace: ""
+    resources:
+      - "nodes"
+      - "events"
+    enabled: true
+
+  # Disabled cluster (for future use)
+  - name: "test-cluster"
+    id: "test-cluster-1"
+    labels:
+      environment: "testing"
+      region: "us-central-1"
+    kubeconfig: "/path/to/test-kubeconfig"
+    context: "test-context"
+    namespace: ""
+    resources:
+      - "nodes"
+      - "events"
+    enabled: false
+
+# Anomaly detection configuration (applies to all clusters)
+anomalyDetection:
+  cpuThreshold: 80.0
+  memoryThreshold: 80.0
+  podRestartThreshold: 3
+  maxHistorySize: 1000
+  cpuAlpha: 0.3
+  memoryAlpha: 0.3
+  restartAlpha: 0.3
+  minStdDev: 1.0
+
+# Storage configuration (shared across all clusters)
+storage:
+  type: "qdrant"
+  storeAlerts: true
+  qdrant:
+    url: "http://localhost:6333"
+    collection: "valkyrie-anomalies"
+    vectorSize: 384
+    distanceMetric: "cosine"
+  redis:
+    url: "localhost:6379"
+    password: ""
+    db: 0
+    keyPrefix: "valkyrie:"
+
+# Embedding configuration (shared across all clusters)
+embedding:
+  type: "ollama"
+  dimension: 384
+  ollama:
+    url: "http://localhost:11434"
+    model: "nomic-embed-text"
+
+# Notification configuration (shared across all clusters)
+notification:
+  enabled: true
+  type: "alertmanager"
+  minSeverity: "warning"
+  alertmanager:
+    url: "http://localhost:9093"
+    defaultLabels:
+      service: "valkyrie"
+      component: "anomaly-detection" 

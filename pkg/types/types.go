@@ -6,9 +6,28 @@ import (
 
 // ClusterState represents the current state of the Kubernetes cluster
 type ClusterState struct {
-	Namespaces []string
-	Nodes      []Node
-	Resources  map[string]ResourceList
+	ClusterID   string
+	ClusterName string
+	Namespaces  []string
+	Nodes       []Node
+	Resources   map[string]ResourceList
+	Events      []ClusterEvent // Cluster-wide events
+}
+
+// MultiClusterState represents the aggregated state of multiple clusters
+type MultiClusterState struct {
+	Clusters map[string]ClusterState
+	Summary  ClusterSummary
+}
+
+// ClusterSummary represents a summary of cluster health and status
+type ClusterSummary struct {
+	TotalClusters     int
+	HealthyClusters   int
+	UnhealthyClusters int
+	TotalNodes        int
+	TotalAnomalies    int
+	LastUpdated       time.Time
 }
 
 // Node represents a Kubernetes node
@@ -55,6 +74,8 @@ type Deployment struct {
 
 // Anomaly represents a detected anomaly in the cluster
 type Anomaly struct {
+	ClusterID   string
+	ClusterName string
 	Type        string
 	Resource    string
 	Namespace   string
@@ -78,9 +99,11 @@ type Event struct {
 
 // Observation represents a historical observation of the cluster state
 type Observation struct {
-	Timestamp time.Time
-	State     ClusterState
-	Reward    float64
+	ClusterID   string
+	ClusterName string
+	Timestamp   time.Time
+	State       ClusterState
+	Reward      float64
 }
 
 // AlertmanagerAlert represents an alert sent to Alertmanager
@@ -95,4 +118,16 @@ type AlertmanagerAlert struct {
 // AlertmanagerPayload represents the payload sent to Alertmanager
 type AlertmanagerPayload struct {
 	Alerts []AlertmanagerAlert // `json:"alerts"`
+}
+
+// ClusterEvent represents a Kubernetes cluster event
+type ClusterEvent struct {
+	Type      string
+	Reason    string
+	Message   string
+	Timestamp time.Time
+	Namespace string
+	Resource  string
+	Severity  string // Normal, Warning, Error
+	Count     int32  // Number of times this event occurred
 }

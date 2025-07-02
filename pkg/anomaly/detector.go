@@ -348,6 +348,59 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		}
 	}
 
+	// Check for problematic events
+	for _, event := range state.Events {
+		// Check for error events
+		if event.Severity == "Error" {
+			anomalies = append(anomalies, types.Anomaly{
+				Type:        "ClusterEvent",
+				Resource:    event.Resource,
+				Namespace:   event.Namespace,
+				Severity:    "High",
+				Description: fmt.Sprintf("Error event: %s - %s (count: %d)", event.Reason, event.Message, event.Count),
+				Timestamp:   event.Timestamp,
+			})
+		}
+
+		// Check for warning events with high count (indicating recurring issues)
+		if event.Severity == "Warning" && event.Count > 5 {
+			anomalies = append(anomalies, types.Anomaly{
+				Type:        "ClusterEvent",
+				Resource:    event.Resource,
+				Namespace:   event.Namespace,
+				Severity:    "Medium",
+				Description: fmt.Sprintf("Recurring warning: %s - %s (count: %d)", event.Reason, event.Message, event.Count),
+				Timestamp:   event.Timestamp,
+			})
+		}
+
+		// Check for specific problematic event types
+		problematicReasons := []string{
+			"FailedScheduling",
+			"FailedMount",
+			"FailedAttachVolume",
+			"FailedCreate",
+			"FailedDelete",
+			"BackOff",
+			"CrashLoopBackOff",
+			"ImagePullBackOff",
+		}
+
+		for _, reason := range problematicReasons {
+			if event.Reason == reason {
+				anomalies = append(anomalies, types.Anomaly{
+					Type:        "ClusterEvent",
+					Resource:    event.Resource,
+					Namespace:   event.Namespace,
+					Severity:    "High",
+					Description: fmt.Sprintf("Problematic event: %s - %s (count: %d)", event.Reason, event.Message, event.Count),
+					Timestamp:   event.Timestamp,
+				})
+				break
+			}
+		}
+	}
+
 	return anomalies
 }
 
