@@ -2,7 +2,7 @@
 
 ## System Overview
 
-Valkyrie is an intelligent Kubernetes monitoring agent that uses reinforcement learning and anomaly detection to monitor cluster health and respond to issues.
+Valkyrie is an intelligent Kubernetes monitoring agent that uses reinforcement learning and anomaly detection to monitor cluster health and respond to issues. It provides comprehensive monitoring with configurable resource collection, statistical anomaly detection, and integration with modern AI/ML tools.
 
 ## Architecture Diagram
 
@@ -13,25 +13,28 @@ graph TB
         K8S[Kubernetes API Server]
         NODES[Cluster Nodes]
         PODS[Pods]
+        SERVICES[Services]
+        DEPLOYMENTS[Deployments]
     end
 
     subgraph "External Services"
-        PROM[Prometheus]
-        GRAFANA[Grafana]
-        ALERTMANAGER[Alertmanager]
+        PROM[Prometheus :9190]
+        GRAFANA[Grafana :3000]
+        ALERTMANAGER[Alertmanager :9093]
         SLACK[Slack]
         EMAIL[Email]
+        WEBHOOK[Webhook]
     end
 
     subgraph "Storage Backends"
-        QDRANT[Qdrant Vector DB]
+        QDRANT[Qdrant Vector DB :6333]
         REDIS[Redis]
     end
 
-    subgraph "Embedding Models"
-        SIMPLE[Simple Hash Model]
+    subgraph "AI/ML Services"
+        OLLAMA[Ollama :11434]
         OPENAI[OpenAI API]
-        OLLAMA[Ollama]
+        SENTENCE_TRANSFORMERS[Sentence Transformers]
     end
 
     %% Main Application
@@ -44,21 +47,30 @@ graph TB
         EMBEDDING[Embedding Models]
         STORAGE[Storage Interface]
         NOTIFIER[Notification System]
-        METRICS[Prometheus Exporter]
+        METRICS[Prometheus Exporter :8080]
+    end
+
+    %% RAG CLI Tool
+    subgraph "RAG CLI Tool"
+        RAG_CLI[RAG CLI]
+        RAG_EMBEDDING[Ollama Embeddings]
+        RAG_GENERATION[Ollama Generation]
     end
 
     %% Data Flow
     K8S --> OBSERVE
     NODES --> OBSERVE
     PODS --> OBSERVE
+    SERVICES --> OBSERVE
+    DEPLOYMENTS --> OBSERVE
     
     OBSERVE --> AGENT
     AGENT --> ANOMALY
     
     ANOMALY --> EMBEDDING
-    EMBEDDING --> SIMPLE
-    EMBEDDING --> OPENAI
     EMBEDDING --> OLLAMA
+    EMBEDDING --> OPENAI
+    EMBEDDING --> SENTENCE_TRANSFORMERS
     
     ANOMALY --> STORAGE
     STORAGE --> QDRANT
@@ -67,6 +79,7 @@ graph TB
     ANOMALY --> NOTIFIER
     NOTIFIER --> SLACK
     NOTIFIER --> EMAIL
+    NOTIFIER --> WEBHOOK
     NOTIFIER --> ALERTMANAGER
     
     METRICS --> PROM
@@ -74,6 +87,13 @@ graph TB
     ALERTMANAGER --> GRAFANA
     
     CONFIG --> AGENT
+
+    %% RAG CLI connections
+    RAG_CLI --> RAG_EMBEDDING
+    RAG_CLI --> RAG_GENERATION
+    RAG_EMBEDDING --> OLLAMA
+    RAG_GENERATION --> OLLAMA
+    RAG_CLI --> QDRANT
 ```
 
 ## Component Details
@@ -81,13 +101,40 @@ graph TB
 ### Core Components
 
 1. **Agent** - Main orchestrator coordinating all activities
-2. **Configuration** - YAML-based configuration management
-3. **Cluster Observer** - Collects real-time Kubernetes data
-4. **Anomaly Detector** - Identifies abnormal patterns using configurable EWMA smoothing
-5. **Embedding Models** - Converts anomalies to vectors
-6. **Storage Interface** - Manages alert and vector storage
-7. **Notification System** - Distributes alerts to channels
-8. **Prometheus Exporter** - Exports metrics for monitoring
+2. **Configuration** - YAML-based configuration management with comprehensive defaults
+3. **Cluster Observer** - Collects real-time Kubernetes data with configurable resource types
+4. **Anomaly Detector** - Identifies abnormal patterns using configurable EWMA smoothing and statistical analysis
+5. **Embedding Models** - Converts anomalies to vectors (Simple, OpenAI, Ollama, Sentence Transformers)
+6. **Storage Interface** - Manages alert and vector storage (Qdrant, Redis)
+7. **Notification System** - Distributes alerts to multiple channels (Slack, Email, Webhook, Alertmanager)
+8. **Prometheus Exporter** - Exports metrics for monitoring with resource-based metric creation
+
+### New Features
+
+#### 1. **Configurable Resource Collection**
+- **Nodes**: CPU/memory usage, capacity, conditions, namespace mapping
+- **Pods**: Status, restart counts, node assignment
+- **Services**: Type and configuration
+- **Deployments**: Replica counts and status
+- **Namespace Mapping**: Always collects namespace information for nodes regardless of pod monitoring
+
+#### 2. **Enhanced Anomaly Detection**
+- **Statistical Analysis**: Z-score, EWMA deviation, minimum standard deviation thresholds
+- **Configurable Alpha Values**: EWMA smoothing factors for different metrics
+- **Minimum History Requirements**: Ensures sufficient data before statistical analysis
+- **Namespace Context**: Anomaly descriptions include namespace information
+
+#### 3. **Command Line Interface**
+- **Print Control Flags**: `-print-anomalies` and `-print-state` flags for output control
+- **Configuration Flag**: `-config` for custom configuration files
+- **Signal Handling**: Graceful shutdown with SIGINT/SIGTERM
+
+#### 4. **RAG CLI Tool**
+- **Document Management**: Add, search, and retrieve documents
+- **Vector Storage**: Qdrant integration for similarity search
+- **LLM Integration**: Ollama for embeddings and text generation
+- **Interactive Mode**: Chat-like interface for easy interaction
+- **Docker Integration**: Complete stack with monitoring services
 
 ### EWMA Alpha Tuning
 
@@ -95,37 +142,100 @@ The anomaly detection uses Exponential Weighted Moving Average (EWMA) with confi
 - **Higher alpha (0.5-0.8)**: Faster reaction to changes, more sensitive to anomalies
 - **Lower alpha (0.1-0.3)**: Slower reaction, more smoothing, less noise
 - **Default alpha (0.3)**: Balanced approach for most monitoring scenarios
+- **Current config (0.015)**: Very conservative smoothing for noisy environments
 
 ### Statistical Analysis Configuration
 
 The system includes configurable parameters for statistical analysis:
-- **minStdDev**: Minimum standard deviation required for statistical analysis (default: 1.0%)
+- **minStdDev**: Minimum standard deviation required for statistical analysis (default: 1.0%, config: 10.0%)
 - **Minimum history**: Requires 5 observations before statistical analysis
 - **EWMA deviation**: Minimum 5% deviation from trend to trigger anomaly
+- **Z-score threshold**: 3.0 for statistical outliers
 
 ### Data Flow
 
 1. **Observation** (30s intervals): Kubernetes → Agent
-2. **Learning**: Cluster State → Historical Observations
-3. **Detection**: State → Anomalies → Vector Storage
-4. **Notification**: Anomalies → External Channels
-5. **Metrics**: State → Prometheus → Grafana
+2. **Namespace Mapping**: Always collects pod-to-node mapping for namespace information
+3. **Learning**: Cluster State → Historical Observations
+4. **Detection**: State → Anomalies → Vector Storage
+5. **Notification**: Anomalies → External Channels
+6. **Metrics**: State → Prometheus → Grafana
 
 ## Configuration
 
-Supports configuration for:
-- Kubernetes connection and resources
-- Anomaly detection thresholds and EWMA smoothing factors (alpha values)
-- Storage backends (Qdrant/Redis)
-- Embedding models (Simple/OpenAI/Ollama)
-- Notification channels (Slack/Email/Webhook/Alertmanager)
+### Kubernetes Configuration
+```yaml
+kubernetes:
+  kubeconfig: "/path/to/kubeconfig"
+  context: "cluster-context"
+  namespace: ""
+  resources:
+    - nodes      # Always enabled for namespace mapping
+    - pods       # Optional
+    - services   # Optional
+    - deployments # Optional
+```
+
+### Anomaly Detection Configuration
+```yaml
+anomalyDetection:
+  cpuThreshold: 80.0
+  memoryThreshold: 80.0
+  podRestartThreshold: 3
+  maxHistorySize: 1000
+  cpuAlpha: 0.015        # EWMA smoothing factor
+  memoryAlpha: 0.015     # EWMA smoothing factor
+  restartAlpha: 0.015    # EWMA smoothing factor
+  minStdDev: 10.0        # Minimum standard deviation
+```
+
+### Embedding Configuration
+```yaml
+embedding:
+  type: simple           # simple, openai, ollama, sentence-transformers
+  dimension: 384
+  openai:
+    apiKey: ""
+    model: text-embedding-ada-002
+  ollama:
+    url: http://localhost:11434
+    model: nomic-embed-text
+  sentenceTransformers:
+    model: all-MiniLM-L6-v2
+    device: cpu
+```
+
+### Storage Configuration
+```yaml
+storage:
+  type: qdrant           # qdrant, redis
+  storeAlerts: false
+  qdrant:
+    url: http://localhost:6333
+    collection: alerts
+    vectorSize: 384
+    distanceMetric: cosine
+```
+
+### Notification Configuration
+```yaml
+notification:
+  enabled: true
+  type: alertmanager     # slack, email, webhook, alertmanager
+  minSeverity: warning
+  alertmanager:
+    url: http://localhost:9093/api/v2/alerts
+    labels:
+      app: valkyrie
+      severity: warning
+```
 
 ## Deployment
 
 ### Local Development
 ```bash
 go build -o valkyrie
-./valkyrie -config config.yaml
+./valkyrie -config config.yaml -print-anomalies -print-state
 ```
 
 ### Docker Deployment
@@ -142,8 +252,58 @@ docker run -v $(pwd)/config.yaml:/app/config.yaml valkyrie
 ## Monitoring Stack Integration
 
 Valkyrie integrates with a complete monitoring stack:
-- **Prometheus**: Metrics collection and storage
-- **Grafana**: Visualization and dashboards
-- **Alertmanager**: Alert routing and management
+- **Prometheus**: Metrics collection and storage (port 9190)
+- **Grafana**: Visualization and dashboards (port 3000)
+- **Alertmanager**: Alert routing and management (port 9093)
+- **Qdrant**: Vector database for anomaly storage (port 6333)
 
-The monitoring stack is defined in `docker-compose.yml` for easy local development and testing. 
+### Service Ports
+- **Valkyrie Metrics**: `:8080`
+- **Prometheus**: `:9190`
+- **Alertmanager**: `:9093`
+- **Grafana**: `:3000`
+- **Qdrant HTTP**: `:6333`
+- **Qdrant gRPC**: `:6334`
+- **Ollama**: `:11434`
+
+### Resource-Based Metrics
+**Important**: Prometheus metrics are only created for resources enabled in your `kubernetes.resources` configuration:
+
+- **If `nodes` is enabled**: All node metrics (CPU, memory, capacity, statistics) are created
+- **If `pods` is enabled**: All pod metrics (restart counts, statistics) are created
+- **Always enabled metrics**: Anomaly detection metrics and historical data
+
+## RAG CLI Tool
+
+The RAG CLI tool provides LangChain-like functionality:
+- **Document Storage**: Add documents to vector database
+- **Similarity Search**: Find relevant documents using embeddings
+- **Question Answering**: Generate responses using retrieved context
+- **Interactive Mode**: Chat-like interface for easy interaction
+
+### Quick Start with RAG CLI
+```bash
+cd scripts/ragcli
+./start-stack.sh
+./rag-cli -interactive
+```
+
+## Recent Updates
+
+### Namespace Collection Enhancement
+- **Always Active**: Namespace mapping works regardless of pod monitoring configuration
+- **Efficient Collection**: Minimal pod data collection for node-to-namespace mapping
+- **Enhanced Anomaly Context**: Anomaly descriptions include namespace information
+- **Improved State Reporting**: Node state includes namespace distribution
+
+### Configuration Improvements
+- **Comprehensive Defaults**: All configuration sections have sensible defaults
+- **Alpha Value Tuning**: Configurable EWMA smoothing factors for different metrics
+- **Statistical Thresholds**: Minimum standard deviation and history requirements
+- **Resource Flexibility**: Configurable resource collection based on needs
+
+### Monitoring Integration
+- **Resource-Based Metrics**: Metrics only created for enabled resources
+- **Statistical Measures**: Mean, standard deviation, and EWMA metrics
+- **Anomaly Tracking**: Comprehensive anomaly detection metrics
+- **Historical Data**: Metric history for trend analysis 
