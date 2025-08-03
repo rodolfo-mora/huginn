@@ -38,6 +38,8 @@ type Agent struct {
 	model         embedding.Model
 	metrics       *metrics.PrometheusExporter
 	metricsServer *metrics.MetricsServer
+	clusterID     string // Cluster ID for multi-cluster mode
+	clusterName   string // Cluster name for multi-cluster mode
 }
 
 // NewAgent creates a new agent instance
@@ -198,6 +200,12 @@ func NewAgentWithoutMetrics(cfg *config.Config) (*Agent, error) {
 	}, nil
 }
 
+// SetClusterInfo sets the cluster information for multi-cluster mode
+func (a *Agent) SetClusterInfo(clusterID, clusterName string) {
+	a.clusterID = clusterID
+	a.clusterName = clusterName
+}
+
 // ObserveCluster collects the current state of the cluster
 func (a *Agent) ObserveCluster() error {
 	ctx := context.Background()
@@ -313,11 +321,23 @@ func (a *Agent) ObserveCluster() error {
 		nsNames = append(nsNames, ns.Name)
 	}
 
+	// Set cluster information from agent fields or fall back to config
+	clusterID := a.clusterID
+	clusterName := a.clusterName
+	if clusterID == "" && len(a.config.Clusters) > 0 {
+		clusterID = a.config.Clusters[0].ID
+	}
+	if clusterName == "" && len(a.config.Clusters) > 0 {
+		clusterName = a.config.Clusters[0].Name
+	}
+
 	a.state = types.ClusterState{
-		Namespaces: nsNames,
-		Nodes:      nodes,
-		Resources:  resources,
-		Events:     events,
+		ClusterID:   clusterID,
+		ClusterName: clusterName,
+		Namespaces:  nsNames,
+		Nodes:       nodes,
+		Resources:   resources,
+		Events:      events,
 	}
 	return nil
 }
@@ -629,7 +649,7 @@ func (a *Agent) DetectAnomalies() ([]types.Anomaly, error) {
 	if a.config.Storage.StoreAlerts && a.storage != nil && a.model != nil {
 		for _, anomaly := range anomalies {
 			// Generate embedding for the anomaly
-			text := fmt.Sprintf("%s %s %s %s", anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.Description)
+			text := fmt.Sprintf("%s %s %s %s %s", anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.ClusterName, anomaly.Description)
 			vector, err := a.model.Encode(text)
 			if err != nil {
 				log.Printf("Failed to generate embedding for anomaly: %v", err)
@@ -711,8 +731,12 @@ func (a *Agent) PrintAnomalies(anomalies []types.Anomaly) {
 
 	fmt.Printf("Detected %d anomalies:\n", len(anomalies))
 	for _, anomaly := range anomalies {
-		fmt.Printf("  - [%s] %s (%s - %s): %s\n",
-			anomaly.Severity, anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.Description)
+		clusterInfo := ""
+		if anomaly.ClusterName != "" {
+			clusterInfo = fmt.Sprintf("[%s] ", anomaly.ClusterName)
+		}
+		fmt.Printf("  - %s[%s] %s (%s - %s): %s\n",
+			clusterInfo, anomaly.Severity, anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.Description)
 	}
 }
 
@@ -804,4 +828,7 @@ func (a *Agent) PrintConfig() {
 		fmt.Printf("  Type: %s\n", a.config.Notification.Type)
 		fmt.Printf("  Min Severity: %s\n", a.config.Notification.MinSeverity)
 	}
+
+	fmt.Printf("\nObservation:\n")
+	fmt.Printf("  Interval: %d seconds\n", a.config.ObservationInterval)
 }

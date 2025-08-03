@@ -108,14 +108,18 @@ func (c *QdrantClient) StoreAlert(vector []float32, anomaly types.Anomaly) error
 		"id":     uuid.New().String(),
 		"vector": vector,
 		"payload": map[string]interface{}{
-			"type":        anomaly.Type,
-			"resource":    anomaly.Resource,
-			"namespace":   anomaly.Namespace,
-			"severity":    anomaly.Severity,
-			"description": anomaly.Description,
-			"value":       anomaly.Value,
-			"threshold":   anomaly.Threshold,
-			"timestamp":   time.Now().Unix(),
+			"type":                 anomaly.Type,
+			"resource":             anomaly.Resource,
+			"cluster":              anomaly.ClusterName,
+			"namespace":            anomaly.Namespace,
+			"severity":             anomaly.Severity,
+			"description":          anomaly.Description,
+			"value":                anomaly.Value,
+			"threshold":            anomaly.Threshold,
+			"namespacesonthisnode": anomaly.NamespacesOnThisNode,
+			"events":               anomaly.Events,
+			"labels":               anomaly.Labels,
+			"timestamp":            time.Now().Unix(),
 		},
 	}
 
@@ -215,11 +219,13 @@ func (c *QdrantClient) SearchSimilarAlerts(vector []float32, limit int) ([]types
 
 		// Extract values from payload
 		anomaly := types.Anomaly{
-			Type:        getStringFromPayload(payload, "type"),
-			Resource:    getStringFromPayload(payload, "resource"),
-			Namespace:   getStringFromPayload(payload, "namespace"),
-			Severity:    getStringFromPayload(payload, "severity"),
-			Description: getStringFromPayload(payload, "description"),
+			Type:                 getStringFromPayload(payload, "type"),
+			Resource:             getStringFromPayload(payload, "resource"),
+			ClusterName:          getStringFromPayload(payload, "cluster"),
+			Namespace:            getStringFromPayload(payload, "namespace"),
+			Severity:             getStringFromPayload(payload, "severity"),
+			Description:          getStringFromPayload(payload, "description"),
+			NamespacesOnThisNode: getStringFromPayload(payload, "namespacesonthisnode"),
 		}
 
 		// Extract numeric values

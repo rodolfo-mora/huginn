@@ -10,11 +10,12 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Clusters         []ClusterConfig        `yaml:"clusters"`
-	AnomalyDetection AnomalyDetectionConfig `yaml:"anomalyDetection"`
-	Storage          StorageConfig          `yaml:"storage"`
-	Embedding        EmbeddingConfig        `yaml:"embedding"`
-	Notification     NotificationConfig     `yaml:"notification"`
+	Clusters            []ClusterConfig        `yaml:"clusters"`
+	AnomalyDetection    AnomalyDetectionConfig `yaml:"anomalyDetection"`
+	Storage             StorageConfig          `yaml:"storage"`
+	Embedding           EmbeddingConfig        `yaml:"embedding"`
+	Notification        NotificationConfig     `yaml:"notification"`
+	ObservationInterval int                    `yaml:"observationInterval"` // Interval in seconds
 }
 
 // ClusterConfig represents configuration for a single Kubernetes cluster
@@ -284,5 +285,10 @@ func setDefaults(config *Config) {
 	// Notification defaults
 	if config.Notification.MinSeverity == "" {
 		config.Notification.MinSeverity = "warning"
+	}
+
+	// Observation interval default
+	if config.ObservationInterval == 0 {
+		config.ObservationInterval = 30 // Default to 30 seconds
 	}
 }

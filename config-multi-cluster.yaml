@@ -107,4 +107,7 @@ notification:
     url: "http://localhost:9093"
     defaultLabels:
       service: "valkyrie"
-      component: "anomaly-detection" 
+      component: "anomaly-detection"
+
+# Observation interval (in seconds)
+observationInterval: 30 

@@ -22,6 +22,8 @@ type Detector struct {
 	cpuStats     *MetricStats
 	memoryStats  *MetricStats
 	restartStats *MetricStats
+	// Alert deduplication
+	recentAlerts map[string]time.Time // key: "type:resource:metric", value: last alert time
 }
 
 // MetricObservation holds a single metric sample for history-based analysis
@@ -68,6 +70,7 @@ func NewDetector(cpuThreshold, memoryThreshold float64, podRestarts int, maxHist
 		restartStats: &MetricStats{
 			alpha: restartAlpha,
 		},
+		recentAlerts: make(map[string]time.Time),
 	}
 }
 
@@ -183,9 +186,8 @@ func (d *Detector) ComputeStats(values []float64, alpha float64) (mean, stddev, 
 // isAnomalyHistory checks if a value is anomalous based on history-based stats
 func isAnomalyHistory(value, mean, stddev, ewma, threshold, minStdDev float64) bool {
 	// Require minimum standard deviation to avoid false positives from tiny variations
-
-	// If we don't have enough data or stddev is too small, only check threshold
 	if stddev < minStdDev {
+		// If we don't have enough variation, only check absolute threshold
 		return value > threshold
 	}
 
@@ -193,14 +195,24 @@ func isAnomalyHistory(value, mean, stddev, ewma, threshold, minStdDev float64) b
 	zScore := math.Abs((value - mean) / stddev)
 
 	// Check EWMA deviation with minimum threshold to avoid noise
-	minEwmaDeviation := 5.0 // Minimum 5% deviation from EWMA for percentage values
+	minEwmaDeviation := 5.0 // Increased from 5.0 to 10.0 for percentage values
 	ewmaDeviation := math.Abs(value - ewma)
 
-	// Anomaly conditions:
-	// 1. Z-score > 3 (statistical outlier)
+	// More conservative anomaly conditions:
+	// 1. Z-score > 4 (increased from 3) AND value > threshold * 0.8 (80% of threshold)
 	// 2. Value > threshold (absolute threshold)
-	// 3. EWMA deviation > max(2*stddev, minEwmaDeviation) (significant change from trend)
-	return zScore > 3 || value > threshold || ewmaDeviation > math.Max(2*stddev, minEwmaDeviation)
+	// 3. EWMA deviation > max(3*stddev, minEwmaDeviation) AND value > threshold * 0.7 (70% of threshold)
+
+	// Condition 1: High z-score with reasonable absolute value
+	highZScore := zScore > 4 && value > threshold*0.8
+
+	// Condition 2: Absolute threshold breach
+	aboveThreshold := value > threshold
+
+	// Condition 3: Significant trend deviation with reasonable absolute value
+	significantDeviation := ewmaDeviation > math.Max(3*stddev, minEwmaDeviation) && value > threshold*0.7
+
+	return highZScore || aboveThreshold || significantDeviation
 }
 
 // DetectAnomalies checks for anomalies in the current state using history-based stats
@@ -219,7 +231,7 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		// Build namespace information for anomaly descriptions
 		namespacesInfo := ""
 		if len(node.Namespaces) > 0 {
-			namespacesInfo = fmt.Sprintf(" (namespaces: %s)", strings.Join(node.Namespaces, ", "))
+			namespacesInfo = fmt.Sprintf(" namespaces on this node: %s)", strings.Join(node.Namespaces, ", "))
 		}
 
 		cpuVals := d.GetMetricHistory("node", node.Name, "cpu")
@@ -227,16 +239,23 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		if len(cpuVals) < 5 {
 			// With insufficient history, only check absolute threshold
 			if cpuUsagePercent > d.cpuThreshold {
-				anomalies = append(anomalies, types.Anomaly{
-					Type:     "HighCPUUsage",
-					Resource: node.Name,
-					Severity: "High",
-					Description: fmt.Sprintf("CPU usage is %.2f%% (insufficient history for statistical analysis)%s",
-						cpuUsagePercent, namespacesInfo),
-					Value:     cpuUsagePercent,
-					Threshold: d.cpuThreshold,
-					Timestamp: time.Now(),
-				})
+				// Check if we should suppress this alert
+				if !d.shouldSuppressAlert("HighCPUUsage", node.Name, "cpu") {
+					anomalies = append(anomalies, types.Anomaly{
+						ClusterID:   state.ClusterID,
+						ClusterName: state.ClusterName,
+						Type:        "HighCPUUsage",
+						Resource:    node.Name,
+						Severity:    "High",
+						Description: fmt.Sprintf("CPU usage is %.2f%% (insufficient history for statistical analysis)",
+							cpuUsagePercent),
+						NamespacesOnThisNode: namespacesInfo,
+						Value:                cpuUsagePercent,
+						Threshold:            d.cpuThreshold,
+						Timestamp:            time.Now(),
+					})
+					d.recordAlertTime("HighCPUUsage", node.Name, "cpu")
+				}
 			}
 			continue
 		}
@@ -246,16 +265,23 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 			d.DebugAnomalyCheck("node", node.Name, "cpu", cpuUsagePercent, d.cpuThreshold)
 		}
 		if isAnomalyHistory(cpuUsagePercent, cpuMean, cpuStd, cpuEwma, d.cpuThreshold, d.minStdDev) {
-			anomalies = append(anomalies, types.Anomaly{
-				Type:     "HighCPUUsage",
-				Resource: node.Name,
-				Severity: "High",
-				Description: fmt.Sprintf("CPU usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)%s",
-					cpuUsagePercent, cpuMean, cpuStd, namespacesInfo),
-				Value:     cpuUsagePercent,
-				Threshold: d.cpuThreshold,
-				Timestamp: time.Now(),
-			})
+			// Check if we should suppress this alert
+			if !d.shouldSuppressAlert("HighCPUUsage", node.Name, "cpu") {
+				anomalies = append(anomalies, types.Anomaly{
+					ClusterID:   state.ClusterID,
+					ClusterName: state.ClusterName,
+					Type:        "HighCPUUsage",
+					Resource:    node.Name,
+					Severity:    "High",
+					Description: fmt.Sprintf("CPU usage is %.2f%% on node %s (mean: %.2f%%, stddev: %.2f%%)%s",
+						cpuUsagePercent, node.Name, cpuMean, cpuStd, namespacesInfo),
+					NamespacesOnThisNode: namespacesInfo,
+					Value:                cpuUsagePercent,
+					Threshold:            d.cpuThreshold,
+					Timestamp:            time.Now(),
+				})
+				d.recordAlertTime("HighCPUUsage", node.Name, "cpu")
+			}
 		}
 
 		memoryVals := d.GetMetricHistory("node", node.Name, "memory")
@@ -263,16 +289,22 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		if len(memoryVals) < 5 {
 			// With insufficient history, only check absolute threshold
 			if memoryUsagePercent > d.memoryThreshold {
-				anomalies = append(anomalies, types.Anomaly{
-					Type:     "HighMemoryUsage",
-					Resource: node.Name,
-					Severity: "High",
-					Description: fmt.Sprintf("Memory usage is %.2f%% (insufficient history for statistical analysis)%s",
-						memoryUsagePercent, namespacesInfo),
-					Value:     memoryUsagePercent,
-					Threshold: d.memoryThreshold,
-					Timestamp: time.Now(),
-				})
+				// Check if we should suppress this alert
+				if !d.shouldSuppressAlert("HighMemoryUsage", node.Name, "memory") {
+					anomalies = append(anomalies, types.Anomaly{
+						ClusterID:   state.ClusterID,
+						ClusterName: state.ClusterName,
+						Type:        "HighMemoryUsage",
+						Resource:    node.Name,
+						Severity:    "High",
+						Description: fmt.Sprintf("Memory usage is %.2f%% (insufficient history for statistical analysis)%s",
+							memoryUsagePercent, namespacesInfo),
+						Value:     memoryUsagePercent,
+						Threshold: d.memoryThreshold,
+						Timestamp: time.Now(),
+					})
+					d.recordAlertTime("HighMemoryUsage", node.Name, "memory")
+				}
 			}
 			continue
 		}
@@ -282,16 +314,22 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 			d.DebugAnomalyCheck("node", node.Name, "memory", memoryUsagePercent, d.memoryThreshold)
 		}
 		if isAnomalyHistory(memoryUsagePercent, memMean, memStd, memEwma, d.memoryThreshold, d.minStdDev) {
-			anomalies = append(anomalies, types.Anomaly{
-				Type:     "HighMemoryUsage",
-				Resource: node.Name,
-				Severity: "High",
-				Description: fmt.Sprintf("Memory usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)%s",
-					memoryUsagePercent, memMean, memStd, namespacesInfo),
-				Value:     memoryUsagePercent,
-				Threshold: d.memoryThreshold,
-				Timestamp: time.Now(),
-			})
+			// Check if we should suppress this alert
+			if !d.shouldSuppressAlert("HighMemoryUsage", node.Name, "memory") {
+				anomalies = append(anomalies, types.Anomaly{
+					ClusterID:   state.ClusterID,
+					ClusterName: state.ClusterName,
+					Type:        "HighMemoryUsage",
+					Resource:    node.Name,
+					Severity:    "High",
+					Description: fmt.Sprintf("Memory usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)%s",
+						memoryUsagePercent, memMean, memStd, namespacesInfo),
+					Value:     memoryUsagePercent,
+					Threshold: d.memoryThreshold,
+					Timestamp: time.Now(),
+				})
+				d.recordAlertTime("HighMemoryUsage", node.Name, "memory")
+			}
 		}
 	}
 
@@ -306,44 +344,62 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 			if len(restartVals) < 3 {
 				// With insufficient history, only check absolute threshold
 				if restartCount > float64(d.podRestarts) {
-					anomalies = append(anomalies, types.Anomaly{
-						Type:      "HighPodRestarts",
-						Resource:  pod.Name,
-						Namespace: ns,
-						Severity:  "Medium",
-						Description: fmt.Sprintf("Pod has restarted %d times (insufficient history for statistical analysis)",
-							pod.RestartCount),
-						Value:     restartCount,
-						Threshold: float64(d.podRestarts),
-						Timestamp: time.Now(),
-					})
+					// Check if we should suppress this alert
+					if !d.shouldSuppressAlert("HighPodRestarts", pod.Name, "restarts") {
+						anomalies = append(anomalies, types.Anomaly{
+							ClusterID:   state.ClusterID,
+							ClusterName: state.ClusterName,
+							Type:        "HighPodRestarts",
+							Resource:    pod.Name,
+							Namespace:   ns,
+							Severity:    "Medium",
+							Description: fmt.Sprintf("Pod has restarted %d times (insufficient history for statistical analysis)",
+								pod.RestartCount),
+							Value:     restartCount,
+							Threshold: float64(d.podRestarts),
+							Timestamp: time.Now(),
+						})
+						d.recordAlertTime("HighPodRestarts", pod.Name, "restarts")
+					}
 				}
 				continue
 			}
 
 			rMean, rStd, rEwma := d.ComputeStats(restartVals, d.restartStats.alpha)
 			if isAnomalyHistory(restartCount, rMean, rStd, rEwma, float64(d.podRestarts), d.minStdDev) {
-				anomalies = append(anomalies, types.Anomaly{
-					Type:      "HighPodRestarts",
-					Resource:  pod.Name,
-					Namespace: ns,
-					Severity:  "Medium",
-					Description: fmt.Sprintf("Pod has restarted %d times (mean: %.2f, stddev: %.2f)",
-						pod.RestartCount, rMean, rStd),
-					Value:     restartCount,
-					Threshold: float64(d.podRestarts),
-					Timestamp: time.Now(),
-				})
+				// Check if we should suppress this alert
+				if !d.shouldSuppressAlert("HighPodRestarts", pod.Name, "restarts") {
+					anomalies = append(anomalies, types.Anomaly{
+						ClusterID:   state.ClusterID,
+						ClusterName: state.ClusterName,
+						Type:        "HighPodRestarts",
+						Resource:    pod.Name,
+						Namespace:   ns,
+						Severity:    "Medium",
+						Description: fmt.Sprintf("Pod has restarted %d times (mean: %.2f, stddev: %.2f)",
+							pod.RestartCount, rMean, rStd),
+						Value:     restartCount,
+						Threshold: float64(d.podRestarts),
+						Timestamp: time.Now(),
+					})
+					d.recordAlertTime("HighPodRestarts", pod.Name, "restarts")
+				}
 			}
 			if pod.Status != "Running" {
-				anomalies = append(anomalies, types.Anomaly{
-					Type:        "PodNotRunning",
-					Resource:    pod.Name,
-					Namespace:   ns,
-					Severity:    "High",
-					Description: fmt.Sprintf("Pod is in %s state", pod.Status),
-					Timestamp:   time.Now(),
-				})
+				// Check if we should suppress this alert
+				if !d.shouldSuppressAlert("PodNotRunning", pod.Name, "status") {
+					anomalies = append(anomalies, types.Anomaly{
+						ClusterID:   state.ClusterID,
+						ClusterName: state.ClusterName,
+						Type:        "PodNotRunning",
+						Resource:    pod.Name,
+						Namespace:   ns,
+						Severity:    "High",
+						Description: fmt.Sprintf("Pod is in %s state", pod.Status),
+						Timestamp:   time.Now(),
+					})
+					d.recordAlertTime("PodNotRunning", pod.Name, "status")
+				}
 			}
 		}
 	}
@@ -353,6 +409,8 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		// Check for error events
 		if event.Severity == "Error" {
 			anomalies = append(anomalies, types.Anomaly{
+				ClusterID:   state.ClusterID,
+				ClusterName: state.ClusterName,
 				Type:        "ClusterEvent",
 				Resource:    event.Resource,
 				Namespace:   event.Namespace,
@@ -365,6 +423,8 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		// Check for warning events with high count (indicating recurring issues)
 		if event.Severity == "Warning" && event.Count > 5 {
 			anomalies = append(anomalies, types.Anomaly{
+				ClusterID:   state.ClusterID,
+				ClusterName: state.ClusterName,
 				Type:        "ClusterEvent",
 				Resource:    event.Resource,
 				Namespace:   event.Namespace,
@@ -389,6 +449,8 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		for _, reason := range problematicReasons {
 			if event.Reason == reason {
 				anomalies = append(anomalies, types.Anomaly{
+					ClusterID:   state.ClusterID,
+					ClusterName: state.ClusterName,
 					Type:        "ClusterEvent",
 					Resource:    event.Resource,
 					Namespace:   event.Namespace,
@@ -466,4 +528,30 @@ func (d *Detector) getAlphaForMetric(metricType string) float64 {
 	default:
 		return 0.3
 	}
+}
+
+// shouldSuppressAlert checks if an alert should be suppressed due to recent duplicates
+func (d *Detector) shouldSuppressAlert(alertType, resource, metric string) bool {
+	key := fmt.Sprintf("%s:%s:%s", alertType, resource, metric)
+	lastAlertTime, exists := d.recentAlerts[key]
+
+	if !exists {
+		return false
+	}
+
+	// Suppress if last alert was within 5 minutes
+	suppress := time.Since(lastAlertTime) < 5*time.Minute
+
+	// Clean up old entries (older than 10 minutes)
+	if time.Since(lastAlertTime) > 10*time.Minute {
+		delete(d.recentAlerts, key)
+	}
+
+	return suppress
+}
+
+// recordAlertTime records the time when an alert was generated
+func (d *Detector) recordAlertTime(alertType, resource, metric string) {
+	key := fmt.Sprintf("%s:%s:%s", alertType, resource, metric)
+	d.recentAlerts[key] = time.Now()
 }

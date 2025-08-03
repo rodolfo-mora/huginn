@@ -44,7 +44,7 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// Main loop
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(time.Duration(cfg.ObservationInterval) * time.Second)
 	defer ticker.Stop()
 
 	go multiAgent.StartMetricsServer() // Starts on :8080

@@ -172,6 +172,9 @@ func (m *MultiClusterAgent) createClusterAgents() error {
 			continue
 		}
 
+		// Set cluster information on the agent
+		agent.SetClusterInfo(clusterConfig.ID, clusterConfig.Name)
+
 		// Set the shared metrics and storage
 		agent.metrics = m.metrics
 		agent.storage = m.storage
@@ -247,14 +250,6 @@ func (m *MultiClusterAgent) DetectAllAnomalies() ([]types.Anomaly, error) {
 			if err != nil {
 				log.Printf("Error detecting anomalies for cluster %s: %v", id, err)
 				return
-			}
-
-			// Add cluster context to anomalies
-			for i := range anomalies {
-				anomalies[i].ClusterID = id
-				if cluster, exists := m.clusterManager.GetCluster(id); exists {
-					anomalies[i].ClusterName = cluster.ClusterConfig.Name
-				}
 			}
 
 			anomalyChan <- anomalies
@@ -393,4 +388,7 @@ func (m *MultiClusterAgent) PrintConfig() {
 		fmt.Printf("  Type: %s\n", m.config.Notification.Type)
 		fmt.Printf("  Min Severity: %s\n", m.config.Notification.MinSeverity)
 	}
+
+	fmt.Printf("\nObservation:\n")
+	fmt.Printf("  Interval: %d seconds\n", m.config.ObservationInterval)
 }

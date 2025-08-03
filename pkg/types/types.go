@@ -74,19 +74,20 @@ type Deployment struct {
 
 // Anomaly represents a detected anomaly in the cluster
 type Anomaly struct {
-	ClusterID   string
-	ClusterName string
-	Type        string
-	Resource    string
-	Namespace   string
-	Severity    string
-	Description string
-	Value       float64
-	Threshold   float64
-	Timestamp   time.Time
-	Labels      map[string]string
-	Events      []Event
-	Metadata    map[string]interface{}
+	ClusterID            string
+	ClusterName          string
+	Type                 string
+	Resource             string
+	Namespace            string
+	NamespacesOnThisNode string
+	Severity             string
+	Description          string
+	Value                float64
+	Threshold            float64
+	Timestamp            time.Time
+	Labels               map[string]string
+	Events               []Event
+	Metadata             map[string]interface{}
 }
 
 // Event represents a Kubernetes event
