@@ -78,6 +78,7 @@ type Anomaly struct {
 	ClusterID            string
 	ClusterName          string
 	Type                 string
+	ResourceType         string // Type of Kubernetes resource (node, pod, service, deployment, event)
 	Resource             string
 	Namespace            string
 	NodeName             string // Name of the Kubernetes node where this anomaly occurred

@@ -109,6 +109,7 @@ func (c *QdrantClient) StoreAlert(vector []float32, anomaly types.Anomaly) error
 		"vector": vector,
 		"payload": map[string]interface{}{
 			"type":                 anomaly.Type,
+			"resourcetype":         anomaly.ResourceType,
 			"resource":             anomaly.Resource,
 			"cluster":              anomaly.ClusterName,
 			"namespace":            anomaly.Namespace,

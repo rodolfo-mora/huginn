@@ -301,9 +301,9 @@ func setDefaults(config *Config) {
 
 	// Formatting defaults
 	if config.Formatting.AnomalyDisplayTemplate == "" {
-		config.Formatting.AnomalyDisplayTemplate = "Cluster {{.ClusterName}} [{{.Severity}}] {{.Type}} in resource {{.Resource}} in namespace {{.Namespace}}: {{.Description}}\n"
+		config.Formatting.AnomalyDisplayTemplate = "Cluster {{.ClusterName}} [{{.Severity}}] {{.Type}} in {{.ResourceType}} resource {{.Resource}} in namespace {{.Namespace}}: {{.Description}}\n"
 	}
 	if config.Formatting.AnomalyEncodingTemplate == "" {
-		config.Formatting.AnomalyEncodingTemplate = "Anomaly detected of type {{.Type}} in resource {{.Resource}} in namespace {{.Namespace}} in cluster {{.ClusterName}}: {{.Description}}"
+		config.Formatting.AnomalyEncodingTemplate = "Anomaly detected of type {{.Type}} in {{.ResourceType}} resource {{.Resource}} in namespace {{.Namespace}} in cluster {{.ClusterName}}: {{.Description}}"
 	}
 }

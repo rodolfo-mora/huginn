@@ -242,12 +242,13 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 				// Check if we should suppress this alert
 				if !d.shouldSuppressAlert("HighCPUUsage", node.Name, "cpu") {
 					anomalies = append(anomalies, types.Anomaly{
-						ClusterID:   state.ClusterID,
-						ClusterName: state.ClusterName,
-						Type:        "HighCPUUsage",
-						Resource:    node.Name,
-						NodeName:    node.Name,
-						Severity:    "High",
+						ClusterID:    state.ClusterID,
+						ClusterName:  state.ClusterName,
+						Type:         "HighCPUUsage",
+						ResourceType: "node",
+						Resource:     node.Name,
+						NodeName:     node.Name,
+						Severity:     "High",
 						Description: fmt.Sprintf("CPU usage is %.2f%% (insufficient history for statistical analysis)",
 							cpuUsagePercent),
 						NamespacesOnThisNode: namespacesInfo,
@@ -269,12 +270,13 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 			// Check if we should suppress this alert
 			if !d.shouldSuppressAlert("HighCPUUsage", node.Name, "cpu") {
 				anomalies = append(anomalies, types.Anomaly{
-					ClusterID:   state.ClusterID,
-					ClusterName: state.ClusterName,
-					Type:        "HighCPUUsage",
-					Resource:    node.Name,
-					NodeName:    node.Name,
-					Severity:    "High",
+					ClusterID:    state.ClusterID,
+					ClusterName:  state.ClusterName,
+					Type:         "HighCPUUsage",
+					ResourceType: "node",
+					Resource:     node.Name,
+					NodeName:     node.Name,
+					Severity:     "High",
 					Description: fmt.Sprintf("CPU usage is %.2f%% on node %s (mean: %.2f%%, stddev: %.2f%%)%s",
 						cpuUsagePercent, node.Name, cpuMean, cpuStd, namespacesInfo),
 					NamespacesOnThisNode: namespacesInfo,
@@ -319,12 +321,13 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 			// Check if we should suppress this alert
 			if !d.shouldSuppressAlert("HighMemoryUsage", node.Name, "memory") {
 				anomalies = append(anomalies, types.Anomaly{
-					ClusterID:   state.ClusterID,
-					ClusterName: state.ClusterName,
-					Type:        "HighMemoryUsage",
-					Resource:    node.Name,
-					NodeName:    node.Name,
-					Severity:    "High",
+					ClusterID:    state.ClusterID,
+					ClusterName:  state.ClusterName,
+					Type:         "HighMemoryUsage",
+					ResourceType: "node",
+					Resource:     node.Name,
+					NodeName:     node.Name,
+					Severity:     "High",
 					Description: fmt.Sprintf("Memory usage is %.2f%% (mean: %.2f%%, stddev: %.2f%%)%s",
 						memoryUsagePercent, memMean, memStd, namespacesInfo),
 					Value:     memoryUsagePercent,
@@ -350,13 +353,14 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 					// Check if we should suppress this alert
 					if !d.shouldSuppressAlert("HighPodRestarts", pod.Name, "restarts") {
 						anomalies = append(anomalies, types.Anomaly{
-							ClusterID:   state.ClusterID,
-							ClusterName: state.ClusterName,
-							Type:        "HighPodRestarts",
-							Resource:    pod.Name,
-							Namespace:   ns,
-							NodeName:    pod.NodeName,
-							Severity:    "Medium",
+							ClusterID:    state.ClusterID,
+							ClusterName:  state.ClusterName,
+							Type:         "HighPodRestarts",
+							ResourceType: "pod",
+							Resource:     pod.Name,
+							Namespace:    ns,
+							NodeName:     pod.NodeName,
+							Severity:     "Medium",
 							Description: fmt.Sprintf("Pod has restarted %d times (insufficient history for statistical analysis)",
 								pod.RestartCount),
 							Value:     restartCount,
@@ -374,13 +378,14 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 				// Check if we should suppress this alert
 				if !d.shouldSuppressAlert("HighPodRestarts", pod.Name, "restarts") {
 					anomalies = append(anomalies, types.Anomaly{
-						ClusterID:   state.ClusterID,
-						ClusterName: state.ClusterName,
-						Type:        "HighPodRestarts",
-						Resource:    pod.Name,
-						Namespace:   ns,
-						NodeName:    pod.NodeName,
-						Severity:    "Medium",
+						ClusterID:    state.ClusterID,
+						ClusterName:  state.ClusterName,
+						Type:         "HighPodRestarts",
+						ResourceType: "pod",
+						Resource:     pod.Name,
+						Namespace:    ns,
+						NodeName:     pod.NodeName,
+						Severity:     "Medium",
 						Description: fmt.Sprintf("Pod has restarted %d times (mean: %.2f, stddev: %.2f)",
 							pod.RestartCount, rMean, rStd),
 						Value:     restartCount,
@@ -394,15 +399,16 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 				// Check if we should suppress this alert
 				if !d.shouldSuppressAlert("PodNotRunning", pod.Name, "status") {
 					anomalies = append(anomalies, types.Anomaly{
-						ClusterID:   state.ClusterID,
-						ClusterName: state.ClusterName,
-						Type:        "PodNotRunning",
-						Resource:    pod.Name,
-						Namespace:   ns,
-						NodeName:    pod.NodeName,
-						Severity:    "High",
-						Description: fmt.Sprintf("Pod is in %s state", pod.Status),
-						Timestamp:   time.Now(),
+						ClusterID:    state.ClusterID,
+						ClusterName:  state.ClusterName,
+						Type:         "PodNotRunning",
+						ResourceType: "pod",
+						Resource:     pod.Name,
+						Namespace:    ns,
+						NodeName:     pod.NodeName,
+						Severity:     "High",
+						Description:  fmt.Sprintf("Pod is in %s state", pod.Status),
+						Timestamp:    time.Now(),
 					})
 					d.recordAlertTime("PodNotRunning", pod.Name, "status")
 				}
@@ -415,30 +421,32 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		// Check for error events
 		if event.Severity == "Error" {
 			anomalies = append(anomalies, types.Anomaly{
-				ClusterID:   state.ClusterID,
-				ClusterName: state.ClusterName,
-				Type:        "ClusterEvent",
-				Resource:    event.Resource,
-				Namespace:   event.Namespace,
-				NodeName:    "", // Events may not be associated with a specific node
-				Severity:    "High",
-				Description: fmt.Sprintf("Error event: %s - %s (count: %d)", event.Reason, event.Message, event.Count),
-				Timestamp:   event.Timestamp,
+				ClusterID:    state.ClusterID,
+				ClusterName:  state.ClusterName,
+				Type:         "ClusterEvent",
+				ResourceType: "event",
+				Resource:     event.Resource,
+				Namespace:    event.Namespace,
+				NodeName:     "", // Events may not be associated with a specific node
+				Severity:     "High",
+				Description:  fmt.Sprintf("Error event: %s - %s (count: %d)", event.Reason, event.Message, event.Count),
+				Timestamp:    event.Timestamp,
 			})
 		}
 
 		// Check for warning events with high count (indicating recurring issues)
 		if event.Severity == "Warning" && event.Count > 5 {
 			anomalies = append(anomalies, types.Anomaly{
-				ClusterID:   state.ClusterID,
-				ClusterName: state.ClusterName,
-				Type:        "ClusterEvent",
-				Resource:    event.Resource,
-				Namespace:   event.Namespace,
-				NodeName:    "", // Events may not be associated with a specific node
-				Severity:    "Medium",
-				Description: fmt.Sprintf("Recurring warning: %s - %s (count: %d)", event.Reason, event.Message, event.Count),
-				Timestamp:   event.Timestamp,
+				ClusterID:    state.ClusterID,
+				ClusterName:  state.ClusterName,
+				Type:         "ClusterEvent",
+				ResourceType: "event",
+				Resource:     event.Resource,
+				Namespace:    event.Namespace,
+				NodeName:     "", // Events may not be associated with a specific node
+				Severity:     "Medium",
+				Description:  fmt.Sprintf("Recurring warning: %s - %s (count: %d)", event.Reason, event.Message, event.Count),
+				Timestamp:    event.Timestamp,
 			})
 		}
 
@@ -457,15 +465,16 @@ func (d *Detector) DetectAnomalies(state types.ClusterState) []types.Anomaly {
 		for _, reason := range problematicReasons {
 			if event.Reason == reason {
 				anomalies = append(anomalies, types.Anomaly{
-					ClusterID:   state.ClusterID,
-					ClusterName: state.ClusterName,
-					Type:        "ClusterEvent",
-					Resource:    event.Resource,
-					Namespace:   event.Namespace,
-					NodeName:    "", // Events may not be associated with a specific node
-					Severity:    "High",
-					Description: fmt.Sprintf("Problematic event: %s - %s (count: %d)", event.Reason, event.Message, event.Count),
-					Timestamp:   event.Timestamp,
+					ClusterID:    state.ClusterID,
+					ClusterName:  state.ClusterName,
+					Type:         "ClusterEvent",
+					ResourceType: "event",
+					Resource:     event.Resource,
+					Namespace:    event.Namespace,
+					NodeName:     "", // Events may not be associated with a specific node
+					Severity:     "High",
+					Description:  fmt.Sprintf("Problematic event: %s - %s (count: %d)", event.Reason, event.Message, event.Count),
+					Timestamp:    event.Timestamp,
 				})
 				break
 			}
