@@ -112,6 +112,7 @@ func (c *QdrantClient) StoreAlert(vector []float32, anomaly types.Anomaly) error
 			"resource":             anomaly.Resource,
 			"cluster":              anomaly.ClusterName,
 			"namespace":            anomaly.Namespace,
+			"nodename":             anomaly.NodeName,
 			"severity":             anomaly.Severity,
 			"description":          anomaly.Description,
 			"value":                anomaly.Value,

@@ -56,6 +56,7 @@ type ResourceList struct {
 type Pod struct {
 	Name         string
 	Namespace    string
+	NodeName     string // Name of the Kubernetes node where this pod is running
 	Status       string
 	RestartCount int32
 }
@@ -79,6 +80,7 @@ type Anomaly struct {
 	Type                 string
 	Resource             string
 	Namespace            string
+	NodeName             string // Name of the Kubernetes node where this anomaly occurred
 	NamespacesOnThisNode string
 	Severity             string
 	Description          string

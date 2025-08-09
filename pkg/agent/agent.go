@@ -532,16 +532,18 @@ func (a *Agent) collectPods(ctx context.Context, namespace string) ([]types.Pod,
 	podToNode := make(map[string]string) // pod name -> node name
 
 	for _, pod := range podList.Items {
+		nodeName := pod.Spec.NodeName
 		pods = append(pods, types.Pod{
 			Name:         pod.Name,
 			Namespace:    pod.Namespace,
+			NodeName:     nodeName,
 			Status:       string(pod.Status.Phase),
 			RestartCount: getPodRestartCount(&pod),
 		})
 
 		// Store the node name for this pod
-		if pod.Spec.NodeName != "" {
-			podToNode[pod.Name] = pod.Spec.NodeName
+		if nodeName != "" {
+			podToNode[pod.Name] = nodeName
 		}
 	}
 
