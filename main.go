@@ -56,11 +56,40 @@ func main() {
 		case <-sigChan:
 			log.Println("Received shutdown signal")
 			return
+		case <-multiAgent.GetContext().Done():
+			log.Println("Context cancelled, shutting down")
+			return
 		case <-ticker.C:
-			// Observe all clusters
-			if err := multiAgent.ObserveAllClusters(); err != nil {
+			// Check for shutdown signal before starting operations
+			select {
+			case <-sigChan:
+				log.Println("Received shutdown signal during operation")
+				return
+			case <-multiAgent.GetContext().Done():
+				log.Println("Context cancelled during operation")
+				return
+			default:
+				// Continue with operations
+			}
+
+			// Observe all clusters with context
+			if err := multiAgent.ObserveAllClustersWithContext(multiAgent.GetContext()); err != nil {
+				if multiAgent.GetContext().Err() != nil {
+					log.Println("Observation cancelled due to shutdown")
+					return
+				}
 				log.Printf("Error observing clusters: %v", err)
 				continue
+			}
+
+			// Check for shutdown again
+			select {
+			case <-sigChan:
+				log.Println("Received shutdown signal after observation")
+				return
+			case <-multiAgent.GetContext().Done():
+				return
+			default:
 			}
 
 			// Learn from observations across all clusters
@@ -69,9 +98,23 @@ func main() {
 				continue
 			}
 
-			// Detect anomalies across all clusters
-			anomalies, err := multiAgent.DetectAllAnomalies()
+			// Check for shutdown again
+			select {
+			case <-sigChan:
+				log.Println("Received shutdown signal after learning")
+				return
+			case <-multiAgent.GetContext().Done():
+				return
+			default:
+			}
+
+			// Detect anomalies across all clusters with context
+			anomalies, err := multiAgent.DetectAllAnomaliesWithContext(multiAgent.GetContext())
 			if err != nil {
+				if multiAgent.GetContext().Err() != nil {
+					log.Println("Anomaly detection cancelled due to shutdown")
+					return
+				}
 				log.Printf("Error detecting anomalies: %v", err)
 				continue
 			}

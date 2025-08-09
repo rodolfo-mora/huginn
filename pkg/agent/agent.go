@@ -239,7 +239,11 @@ func (a *Agent) SetClusterInfo(clusterID, clusterName string) {
 
 // ObserveCluster collects the current state of the cluster
 func (a *Agent) ObserveCluster() error {
-	ctx := context.Background()
+	return a.ObserveClusterWithContext(context.Background())
+}
+
+// ObserveClusterWithContext collects the current state of the cluster with context cancellation support
+func (a *Agent) ObserveClusterWithContext(ctx context.Context) error {
 
 	// Create metrics client
 	metricsClient, err := metricsv.NewForConfig(a.restConfig)

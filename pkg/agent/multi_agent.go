@@ -190,15 +190,34 @@ func (m *MultiClusterAgent) createClusterAgents() error {
 
 // ObserveAllClusters observes all enabled clusters
 func (m *MultiClusterAgent) ObserveAllClusters() error {
+	return m.ObserveAllClustersWithContext(context.Background())
+}
+
+// ObserveAllClustersWithContext observes all enabled clusters with context cancellation support
+func (m *MultiClusterAgent) ObserveAllClustersWithContext(ctx context.Context) error {
 	var wg sync.WaitGroup
 	errors := make(chan error, len(m.agents))
+	done := make(chan struct{})
 
+	// Start all observations
 	for clusterID, agent := range m.agents {
 		wg.Add(1)
 		go func(id string, a *Agent) {
 			defer wg.Done()
 
-			if err := a.ObserveCluster(); err != nil {
+			// Check for cancellation before starting
+			select {
+			case <-ctx.Done():
+				errors <- fmt.Errorf("cluster %s: observation cancelled", id)
+				return
+			default:
+			}
+
+			if err := a.ObserveClusterWithContext(ctx); err != nil {
+				if ctx.Err() != nil {
+					errors <- fmt.Errorf("cluster %s: %v", id, ctx.Err())
+					return
+				}
 				log.Printf("Error observing cluster %s: %v", id, err)
 				m.clusterManager.SetClusterHealth(id, false, err)
 				errors <- fmt.Errorf("cluster %s: %v", id, err)
@@ -218,53 +237,93 @@ func (m *MultiClusterAgent) ObserveAllClusters() error {
 		}(clusterID, agent)
 	}
 
-	wg.Wait()
-	close(errors)
+	// Wait for completion or cancellation
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
 
-	// Check for errors
-	hasErrors := false
-	for err := range errors {
-		hasErrors = true
-		log.Printf("Cluster observation error: %v", err)
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-done:
+		close(errors)
+
+		// Check for errors
+		hasErrors := false
+		for err := range errors {
+			hasErrors = true
+			log.Printf("Cluster observation error: %v", err)
+		}
+
+		if hasErrors {
+			return fmt.Errorf("some clusters failed to observe")
+		}
+
+		return nil
 	}
-
-	if hasErrors {
-		return fmt.Errorf("some clusters failed to observe")
-	}
-
-	return nil
 }
 
 // DetectAllAnomalies detects anomalies across all clusters
 func (m *MultiClusterAgent) DetectAllAnomalies() ([]types.Anomaly, error) {
+	return m.DetectAllAnomaliesWithContext(context.Background())
+}
+
+// DetectAllAnomaliesWithContext detects anomalies across all clusters with context cancellation support
+func (m *MultiClusterAgent) DetectAllAnomaliesWithContext(ctx context.Context) ([]types.Anomaly, error) {
 	var allAnomalies []types.Anomaly
 	var wg sync.WaitGroup
 	anomalyChan := make(chan []types.Anomaly, len(m.agents))
+	done := make(chan struct{})
 
 	for clusterID, agent := range m.agents {
 		wg.Add(1)
 		go func(id string, a *Agent) {
 			defer wg.Done()
 
+			// Check for cancellation before starting
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+
 			anomalies, err := a.DetectAnomalies()
 			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
 				log.Printf("Error detecting anomalies for cluster %s: %v", id, err)
 				return
 			}
 
-			anomalyChan <- anomalies
+			select {
+			case anomalyChan <- anomalies:
+			case <-ctx.Done():
+				return
+			}
 		}(clusterID, agent)
 	}
 
-	wg.Wait()
-	close(anomalyChan)
+	// Wait for completion or cancellation
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
 
-	// Collect all anomalies
-	for anomalies := range anomalyChan {
-		allAnomalies = append(allAnomalies, anomalies...)
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-done:
+		close(anomalyChan)
+
+		// Collect all anomalies
+		for anomalies := range anomalyChan {
+			allAnomalies = append(allAnomalies, anomalies...)
+		}
+
+		return allAnomalies, nil
 	}
-
-	return allAnomalies, nil
 }
 
 // LearnFromAllClusters learns from observations across all clusters
@@ -338,6 +397,11 @@ func (m *MultiClusterAgent) Stop() {
 // GetClusterManager returns the cluster manager
 func (m *MultiClusterAgent) GetClusterManager() *cluster.Manager {
 	return m.clusterManager
+}
+
+// GetContext returns the multi-cluster agent's context
+func (m *MultiClusterAgent) GetContext() context.Context {
+	return m.ctx
 }
 
 // PrintConfig prints the current configuration
