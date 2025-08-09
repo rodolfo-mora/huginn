@@ -15,6 +15,7 @@ type Config struct {
 	Storage             StorageConfig          `yaml:"storage"`
 	Embedding           EmbeddingConfig        `yaml:"embedding"`
 	Notification        NotificationConfig     `yaml:"notification"`
+	Formatting          FormattingConfig       `yaml:"formatting"`
 	ObservationInterval int                    `yaml:"observationInterval"` // Interval in seconds
 }
 
@@ -140,6 +141,12 @@ type WebhookConfig struct {
 type AlertmanagerConfig struct {
 	URL           string            `yaml:"url"`
 	DefaultLabels map[string]string `yaml:"defaultLabels"`
+}
+
+// FormattingConfig represents template-based formatting configuration
+type FormattingConfig struct {
+	AnomalyDisplayTemplate  string `yaml:"anomalyDisplayTemplate"`
+	AnomalyEncodingTemplate string `yaml:"anomalyEncodingTemplate"`
 }
 
 // LoadConfig loads the configuration from a YAML file
@@ -290,5 +297,13 @@ func setDefaults(config *Config) {
 	// Observation interval default
 	if config.ObservationInterval == 0 {
 		config.ObservationInterval = 30 // Default to 30 seconds
+	}
+
+	// Formatting defaults
+	if config.Formatting.AnomalyDisplayTemplate == "" {
+		config.Formatting.AnomalyDisplayTemplate = "Cluster {{.ClusterName}} [{{.Severity}}] {{.Type}} in resource {{.Resource}} in namespace {{.Namespace}}: {{.Description}}\n"
+	}
+	if config.Formatting.AnomalyEncodingTemplate == "" {
+		config.Formatting.AnomalyEncodingTemplate = "Anomaly detected of type {{.Type}} in resource {{.Resource}} in namespace {{.Namespace}} in cluster {{.ClusterName}}: {{.Description}}"
 	}
 }

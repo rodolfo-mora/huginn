@@ -1,0 +1,52 @@
+# Test with a different observation interval
+observationInterval: 60 
+# Test configuration with different observation interval
+clusters:
+  - name: "test"
+    id: "test-cluster"
+    kubeconfig: "/Users/rodgon/.kube/config"
+    context: ""
+    namespace: ""
+    resources:
+      - "nodes"
+      - "events"
+    enabled: true
+
+anomalyDetection:
+  cpuThreshold: 80.0
+  memoryThreshold: 80.0
+  podRestartThreshold: 3
+  maxHistorySize: 1000
+
+storage:
+  type: "qdrant"
+  storeAlerts: true
+  qdrant:
+    url: "http://localhost:6333"
+    collection: "test-alerts"
+    vectorSize: 384
+    distanceMetric: "cosine"
+
+embedding:
+  type: "simple"
+  dimension: 384
+
+notification:
+  enabled: false
+  type: "alertmanager"
+  minSeverity: "warning"
+  alertmanager:
+    url: "http://localhost:9093"
+    defaultLabels:
+      service: "valkyrie"
+      component: "anomaly-detection"
+
+# Formatting configuration using Go templates
+formatting:
+  # Template for displaying anomalies in console output
+  # Available fields: .Type, .Resource, .Namespace, .ClusterName, .Description, .Severity, .Timestamp
+  anomalyDisplayTemplate: "🚨 Cluster {{.ClusterName}} [{{.Severity}}] {{.Type}} in resource {{.Resource}} in namespace {{.Namespace}}: {{.Description}}\n"
+  
+  # Template for encoding anomalies into text for vector storage
+  # This should be a single line without newlines for better vector similarity
+  anomalyEncodingTemplate: "Anomaly detected of type {{.Type}} in resource {{.Resource}} in namespace {{.Namespace}} in cluster {{.ClusterName}}: {{.Description}}"

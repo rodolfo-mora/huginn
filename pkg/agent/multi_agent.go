@@ -312,8 +312,15 @@ func (m *MultiClusterAgent) PrintAllAnomalies(anomalies []types.Anomaly) {
 
 	fmt.Printf("Detected %d anomalies across all clusters:\n", len(anomalies))
 	for _, anomaly := range anomalies {
-		fmt.Printf("  - [%s] %s/%s (%s - %s): %s\n",
-			anomaly.Severity, anomaly.ClusterName, anomaly.Resource, anomaly.Type, anomaly.Namespace, anomaly.Description)
+		formatted, err := formatAnomalyForDisplay(anomaly, m.config)
+		if err != nil {
+			log.Printf("Failed to format anomaly for display: %v", err)
+			// Fallback to simple format
+			fmt.Printf("  - [%s] %s/%s (%s - %s): %s\n",
+				anomaly.Severity, anomaly.ClusterName, anomaly.Resource, anomaly.Type, anomaly.Namespace, anomaly.Description)
+		} else {
+			fmt.Print(formatted)
+		}
 	}
 }
 

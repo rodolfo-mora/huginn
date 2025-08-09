@@ -2,6 +2,10 @@
 
 Valkyrie is an intelligent Kubernetes monitoring agent that uses reinforcement learning to detect and respond to anomalies in your clusters. It supports monitoring multiple Kubernetes clusters simultaneously.
 
+## Authors
+
+- **Rodolfo Gonzalez** - *Initial work and primary maintainer* - [@rodolfo-mora](https://github.com/rodolfo-mora)
+
 ## Features
 
 - **Multi-Cluster Support**: Monitor multiple Kubernetes clusters from a single agent
@@ -218,6 +222,16 @@ go build -o valkyrie
 ```bash
 go test ./...
 ```
+
+### Contributors
+
+We welcome contributions! If you'd like to contribute to Valkyrie, please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 

@@ -1,16 +1,17 @@
 package agent
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"strings"
+	"text/template"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-
-	"context"
 
 	"github.com/rodgon/valkyrie/pkg/anomaly"
 	"github.com/rodgon/valkyrie/pkg/config"
@@ -24,6 +25,36 @@ import (
 	metricsapi "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
 )
+
+// formatAnomalyForEncoding formats an anomaly as text for vector encoding using template
+func formatAnomalyForEncoding(anomaly types.Anomaly, cfg *config.Config) (string, error) {
+	tmpl, err := template.New("encoding").Parse(cfg.Formatting.AnomalyEncodingTemplate)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse encoding template: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, anomaly); err != nil {
+		return "", fmt.Errorf("failed to execute encoding template: %v", err)
+	}
+
+	return buf.String(), nil
+}
+
+// formatAnomalyForDisplay formats an anomaly for console display using template
+func formatAnomalyForDisplay(anomaly types.Anomaly, cfg *config.Config) (string, error) {
+	tmpl, err := template.New("display").Parse(cfg.Formatting.AnomalyDisplayTemplate)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse display template: %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, anomaly); err != nil {
+		return "", fmt.Errorf("failed to execute display template: %v", err)
+	}
+
+	return buf.String(), nil
+}
 
 // Agent represents the main agent that observes and learns from the cluster
 type Agent struct {
@@ -649,7 +680,11 @@ func (a *Agent) DetectAnomalies() ([]types.Anomaly, error) {
 	if a.config.Storage.StoreAlerts && a.storage != nil && a.model != nil {
 		for _, anomaly := range anomalies {
 			// Generate embedding for the anomaly
-			text := fmt.Sprintf("%s %s %s %s %s", anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.ClusterName, anomaly.Description)
+			text, err := formatAnomalyForEncoding(anomaly, a.config)
+			if err != nil {
+				log.Printf("Failed to format anomaly for encoding: %v", err)
+				continue
+			}
 			vector, err := a.model.Encode(text)
 			if err != nil {
 				log.Printf("Failed to generate embedding for anomaly: %v", err)
@@ -731,12 +766,15 @@ func (a *Agent) PrintAnomalies(anomalies []types.Anomaly) {
 
 	fmt.Printf("Detected %d anomalies:\n", len(anomalies))
 	for _, anomaly := range anomalies {
-		clusterInfo := ""
-		if anomaly.ClusterName != "" {
-			clusterInfo = fmt.Sprintf("[%s] ", anomaly.ClusterName)
+		formatted, err := formatAnomalyForDisplay(anomaly, a.config)
+		if err != nil {
+			log.Printf("Failed to format anomaly for display: %v", err)
+			// Fallback to simple format
+			fmt.Printf("  - [%s] %s/%s (%s - %s): %s\n",
+				anomaly.Severity, anomaly.ClusterName, anomaly.Resource, anomaly.Type, anomaly.Namespace, anomaly.Description)
+		} else {
+			fmt.Print(formatted)
 		}
-		fmt.Printf("  - %s[%s] %s (%s - %s): %s\n",
-			clusterInfo, anomaly.Severity, anomaly.Type, anomaly.Resource, anomaly.Namespace, anomaly.Description)
 	}
 }
 

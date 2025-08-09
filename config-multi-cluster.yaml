@@ -1,6 +1,7 @@
 # Multi-Cluster Configuration Example
 # This configuration demonstrates how to monitor multiple Kubernetes clusters
-
+# Observation interval (in seconds)
+observationInterval: 30 
 clusters:
   # Production cluster
   - name: "production"
@@ -108,6 +109,13 @@ notification:
     defaultLabels:
       service: "valkyrie"
       component: "anomaly-detection"
-
-# Observation interval (in seconds)
-observationInterval: 30 
+      
+# Formatting configuration using Go templates
+formatting:
+  # Template for displaying anomalies in console output
+  # Available fields: .Type, .Resource, .Namespace, .ClusterName, .Description, .Severity, .Timestamp
+  anomalyDisplayTemplate: "🚨 Cluster {{.ClusterName}} [{{.Severity}}] {{.Type}} in resource {{.Resource}} in namespace {{.Namespace}}: {{.Description}}\n"
+  
+  # Template for encoding anomalies into text for vector storage
+  # This should be a single line without newlines for better vector similarity
+  anomalyEncodingTemplate: "Anomaly detected of type {{.Type}} in resource {{.Resource}} in namespace {{.Namespace}} in cluster {{.ClusterName}}: {{.Description}}"
