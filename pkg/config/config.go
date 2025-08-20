@@ -31,14 +31,6 @@ type ClusterConfig struct {
 	Enabled    bool              `yaml:"enabled"`
 }
 
-// KubernetesConfig represents Kubernetes-specific configuration (deprecated, use ClusterConfig)
-type KubernetesConfig struct {
-	Kubeconfig string   `yaml:"kubeconfig"`
-	Context    string   `yaml:"context"`
-	Namespace  string   `yaml:"namespace"`
-	Resources  []string `yaml:"resources"`
-}
-
 // AnomalyDetectionConfig represents anomaly detection configuration
 type AnomalyDetectionConfig struct {
 	CPUThreshold        float64 `yaml:"cpuThreshold"`
