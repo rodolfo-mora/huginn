@@ -391,14 +391,19 @@ func (a *Agent) ObserveClusterWithContext(ctx context.Context) error {
 		// Collect full resource data per namespace if configured
 		resourceList := types.ResourceList{}
 
-		// Collect pods if configured
+		// Collect pods if configured (reuse already fetched podList to avoid duplicate API calls)
 		if a.shouldCollectResource("pods") {
-			pods, _, err := a.collectPods(ctx, ns.Name)
-			if err != nil {
-				log.Printf("Warning: failed to collect pods in namespace %s: %v", ns.Name, err)
-			} else {
-				resourceList.Pods = pods
+			pods := make([]types.Pod, 0, len(podList.Items))
+			for _, pod := range podList.Items {
+				pods = append(pods, types.Pod{
+					Name:         pod.Name,
+					Namespace:    pod.Namespace,
+					NodeName:     pod.Spec.NodeName,
+					Status:       string(pod.Status.Phase),
+					RestartCount: getPodRestartCount(&pod),
+				})
 			}
+			resourceList.Pods = pods
 		}
 
 		// Collect services if configured
