@@ -238,23 +238,24 @@ func (c *QdrantClient) SearchSimilarAlerts(vector []float32, limit int) ([]types
 		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
-	// Convert to anomalies
+	// Convert to anomalies with consistent field handling
 	anomalies := make([]types.Anomaly, len(result.Result))
 	for i, r := range result.Result {
 		payload := r.Payload
 
-		// Extract values from payload
 		anomaly := types.Anomaly{
 			Type:                 getStringFromPayload(payload, "type"),
+			ResourceType:         getStringFromPayload(payload, "resourcetype"),
 			Resource:             getStringFromPayload(payload, "resource"),
 			ClusterName:          getStringFromPayload(payload, "cluster"),
 			Namespace:            getStringFromPayload(payload, "namespace"),
+			NodeName:             getStringFromPayload(payload, "nodename"),
 			Severity:             getStringFromPayload(payload, "severity"),
 			Description:          getStringFromPayload(payload, "description"),
 			NamespacesOnThisNode: getStringFromPayload(payload, "namespacesonthisnode"),
 		}
 
-		// Extract numeric values
+		// Numeric values
 		if value, ok := payload["value"].(float64); ok {
 			anomaly.Value = value
 		}
@@ -262,9 +263,53 @@ func (c *QdrantClient) SearchSimilarAlerts(vector []float32, limit int) ([]types
 			anomaly.Threshold = threshold
 		}
 
-		// Extract timestamp
-		if timestamp, ok := payload["timestamp"].(float64); ok {
-			anomaly.Timestamp = time.Unix(int64(timestamp), 0)
+		// Timestamp (stored as unix seconds)
+		if ts, ok := payload["timestamp"].(float64); ok {
+			anomaly.Timestamp = time.Unix(int64(ts), 0)
+		}
+
+		// Labels map[string]string
+		if labelsRaw, ok := payload["labels"].(map[string]interface{}); ok {
+			labels := make(map[string]string, len(labelsRaw))
+			for k, v := range labelsRaw {
+				if sv, ok := v.(string); ok {
+					labels[k] = sv
+				} else {
+					labels[k] = fmt.Sprintf("%v", v)
+				}
+			}
+			anomaly.Labels = labels
+		}
+
+		// Metadata passthrough if object
+		if md, ok := payload["metadata"].(map[string]interface{}); ok {
+			anomaly.Metadata = md
+		}
+
+		// Events []types.Event (best-effort conversion)
+		if evRaw, ok := payload["events"].([]interface{}); ok {
+			events := make([]types.Event, 0, len(evRaw))
+			for _, e := range evRaw {
+				if m, ok := e.(map[string]interface{}); ok {
+					evt := types.Event{}
+					if s, ok := m["Type"].(string); ok {
+						evt.Type = s
+					}
+					if s, ok := m["Reason"].(string); ok {
+						evt.Reason = s
+					}
+					if s, ok := m["Message"].(string); ok {
+						evt.Message = s
+					}
+					if num, ok := m["Timestamp"].(float64); ok {
+						evt.Timestamp = time.Unix(int64(num), 0)
+					}
+					events = append(events, evt)
+				}
+			}
+			if len(events) > 0 {
+				anomaly.Events = events
+			}
 		}
 
 		anomalies[i] = anomaly
