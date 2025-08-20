@@ -66,10 +66,13 @@ func NewMultiClusterAgent(cfg *config.Config) (*MultiClusterAgent, error) {
 	var storageClient storage.Storage
 	if cfg.Storage.StoreAlerts {
 		storageConfig := storage.StorageConfig{
-			Type:     storage.StorageType(cfg.Storage.Type),
-			URL:      cfg.Storage.Qdrant.URL,
-			Password: cfg.Storage.Redis.Password,
-			DB:       cfg.Storage.Redis.DB,
+			Type:       storage.StorageType(cfg.Storage.Type),
+			URL:        cfg.Storage.Qdrant.URL,
+			Password:   cfg.Storage.Redis.Password,
+			DB:         cfg.Storage.Redis.DB,
+			Collection: cfg.Storage.Qdrant.Collection,
+			VectorSize: cfg.Storage.Qdrant.VectorSize,
+			Distance:   cfg.Storage.Qdrant.DistanceMetric,
 		}
 
 		var err error

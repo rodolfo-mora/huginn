@@ -208,10 +208,13 @@ func NewAgent(cfg *config.Config) (*Agent, error) {
 	if cfg.Storage.StoreAlerts {
 		// Create storage client
 		storageConfig := storage.StorageConfig{
-			Type:     storage.StorageType(cfg.Storage.Type),
-			URL:      cfg.Storage.Qdrant.URL,
-			Password: cfg.Storage.Redis.Password,
-			DB:       cfg.Storage.Redis.DB,
+			Type:       storage.StorageType(cfg.Storage.Type),
+			URL:        cfg.Storage.Qdrant.URL,
+			Password:   cfg.Storage.Redis.Password,
+			DB:         cfg.Storage.Redis.DB,
+			Collection: cfg.Storage.Qdrant.Collection,
+			VectorSize: cfg.Storage.Qdrant.VectorSize,
+			Distance:   cfg.Storage.Qdrant.DistanceMetric,
 		}
 
 		storageClient, err = storage.NewStorage(storageConfig)

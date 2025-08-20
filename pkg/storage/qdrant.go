@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -17,14 +18,18 @@ type QdrantClient struct {
 	url        string
 	collection string
 	client     *http.Client
+	vectorSize int
+	distance   string
 }
 
 // NewQdrantClient creates a new Qdrant client
-func NewQdrantClient(url, collection string) (*QdrantClient, error) {
+func NewQdrantClient(url, collection string, vectorSize int, distance string) (*QdrantClient, error) {
 	client := &QdrantClient{
 		url:        url,
 		collection: collection,
 		client:     &http.Client{Timeout: 10 * time.Second},
+		vectorSize: vectorSize,
+		distance:   distance,
 	}
 
 	// Ensure collection exists
@@ -67,11 +72,30 @@ func (c *QdrantClient) ensureCollection() error {
 
 // createCollection creates a new collection with proper configuration
 func (c *QdrantClient) createCollection() error {
+	// Defaults if not provided
+	size := c.vectorSize
+	if size <= 0 {
+		size = 384
+	}
+	distance := c.distance
+	if distance == "" {
+		distance = "Cosine"
+	}
+	// Normalize distance casing to what Qdrant expects
+	switch strings.ToLower(distance) {
+	case "cosine":
+		distance = "Cosine"
+	case "euclid", "euclidean", "l2":
+		distance = "Euclid"
+	case "dot", "dotproduct":
+		distance = "Dot"
+	}
+
 	// Create collection configuration
 	config := map[string]interface{}{
 		"vectors": map[string]interface{}{
-			"size":     384, // Default vector size
-			"distance": "Cosine",
+			"size":     size,
+			"distance": distance,
 		},
 	}
 

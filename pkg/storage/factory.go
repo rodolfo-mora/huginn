@@ -22,13 +22,17 @@ type StorageConfig struct {
 	URL      string
 	Password string
 	DB       int
+	// Qdrant-specific settings
+	Collection string
+	VectorSize int
+	Distance   string
 }
 
 // NewStorage creates a new storage instance based on the configuration
 func NewStorage(config StorageConfig) (Storage, error) {
 	switch config.Type {
 	case StorageTypeQdrant:
-		return NewQdrantClient(config.URL, "alerts")
+		return NewQdrantClient(config.URL, config.Collection, config.VectorSize, config.Distance)
 	case StorageTypeRedis:
 		return NewRedisClient(config.URL, config.Password, config.DB)
 	default:
@@ -53,6 +57,16 @@ func NewStorageFromEnv() (Storage, error) {
 		if config.URL == "" {
 			config.URL = "http://localhost:6333"
 		}
+		config.Collection = os.Getenv("QDRANT_COLLECTION")
+		if config.Collection == "" {
+			config.Collection = "alerts"
+		}
+		if v := os.Getenv("QDRANT_VECTOR_SIZE"); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				config.VectorSize = n
+			}
+		}
+		config.Distance = os.Getenv("QDRANT_DISTANCE")
 		return NewStorage(config)
 
 	case StorageTypeRedis:
