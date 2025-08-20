@@ -122,7 +122,7 @@ func (d *Detector) PrintHistory() {
 
 // 	// Calculate z-score
 // 	zScore := math.Abs((value - s.mean) / s.stdDev)
-
+//  // EWMA: Exponential Weighted Moving Average
 // 	// Consider it anomalous if:
 // 	// 1. Z-score is high (e.g., > 3)
 // 	// 2. Value is above threshold

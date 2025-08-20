@@ -7,6 +7,7 @@ import (
 	"hash/fnv"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -116,6 +117,11 @@ func NewOllamaModel(url, model string, dimension int) *OllamaModel {
 
 // Encode implements the Model interface
 func (m *OllamaModel) Encode(text string) ([]float32, error) {
+	// Handle edge case of empty text
+	if strings.TrimSpace(text) == "" {
+		return nil, fmt.Errorf("cannot generate embedding for empty text")
+	}
+
 	// Prepare the request payload
 	payload := map[string]interface{}{
 		"model":  m.model,
@@ -149,7 +155,8 @@ func (m *OllamaModel) Encode(text string) ([]float32, error) {
 
 	// Validate embedding dimension
 	if len(response.Embedding) != m.dimension {
-		return nil, fmt.Errorf("expected embedding dimension %d, got %d", m.dimension, len(response.Embedding))
+		return nil, fmt.Errorf("expected embedding dimension %d, got %d (text length: %d, text preview: '%.100s')",
+			m.dimension, len(response.Embedding), len(text), text)
 	}
 
 	return response.Embedding, nil

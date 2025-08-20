@@ -28,32 +28,123 @@ import (
 
 // formatAnomalyForEncoding formats an anomaly as text for vector encoding using template
 func formatAnomalyForEncoding(anomaly types.Anomaly, cfg *config.Config) (string, error) {
-	tmpl, err := template.New("encoding").Parse(cfg.Formatting.AnomalyEncodingTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse encoding template: %v", err)
-	}
-
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, anomaly); err != nil {
-		return "", fmt.Errorf("failed to execute encoding template: %v", err)
-	}
-
-	return buf.String(), nil
+	return formatAnomaly(anomaly, cfg.Formatting.AnomalyEncodingTemplate)
 }
 
 // formatAnomalyForDisplay formats an anomaly for console display using template
 func formatAnomalyForDisplay(anomaly types.Anomaly, cfg *config.Config) (string, error) {
-	tmpl, err := template.New("display").Parse(cfg.Formatting.AnomalyDisplayTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse display template: %v", err)
+	return formatAnomaly(anomaly, cfg.Formatting.AnomalyDisplayTemplate)
+}
+
+// safeAnomalyData wraps an anomaly with safe defaults for template execution
+type safeAnomalyData struct {
+	types.Anomaly
+}
+
+// Safe methods for template execution with fallbacks
+func (s safeAnomalyData) SafeClusterName() string {
+	if s.ClusterName == "" {
+		return "unknown-cluster"
 	}
+	return s.ClusterName
+}
+
+func (s safeAnomalyData) SafeSeverity() string {
+	if s.Severity == "" {
+		return "Medium"
+	}
+	return s.Severity
+}
+
+func (s safeAnomalyData) SafeType() string {
+	if s.Type == "" {
+		return "UnknownAnomaly"
+	}
+	return s.Type
+}
+
+func (s safeAnomalyData) SafeResourceType() string {
+	if s.ResourceType == "" {
+		return "resource"
+	}
+	return s.ResourceType
+}
+
+func (s safeAnomalyData) SafeResource() string {
+	if s.Resource == "" {
+		return "unknown-resource"
+	}
+	return s.Resource
+}
+
+func (s safeAnomalyData) SafeNamespace() string {
+	if s.Namespace == "" {
+		return "default"
+	}
+	return s.Namespace
+}
+
+func (s safeAnomalyData) SafeNodeName() string {
+	return s.NodeName // This can be empty for cluster events
+}
+
+func (s safeAnomalyData) SafeDescription() string {
+	if s.Description == "" {
+		return "No description available"
+	}
+	return s.Description
+}
+
+func (s safeAnomalyData) HasNodeName() bool {
+	return s.NodeName != ""
+}
+
+// formatAnomaly is a generic function to format an anomaly using a template with safe defaults.
+func formatAnomaly(anomaly types.Anomaly, tplt string) (string, error) {
+	// Define template functions for additional safety
+	funcMap := template.FuncMap{
+		"default": func(value, defaultValue string) string {
+			if value == "" {
+				return defaultValue
+			}
+			return value
+		},
+		"nonEmpty": func(value string) bool {
+			return strings.TrimSpace(value) != ""
+		},
+	}
+
+	tmpl, err := template.New("anomaly").Funcs(funcMap).Parse(tplt)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse template: %v", err)
+	}
+
+	// Wrap anomaly with safe accessors
+	safeData := safeAnomalyData{Anomaly: anomaly}
 
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, anomaly); err != nil {
-		return "", fmt.Errorf("failed to execute display template: %v", err)
+	if err := tmpl.Execute(&buf, safeData); err != nil {
+		return "", fmt.Errorf("failed to execute template: %v", err)
 	}
 
-	return buf.String(), nil
+	result := buf.String()
+	trimmedResult := strings.TrimSpace(result)
+
+	// Final safety check - if the result is still empty or contains only template artifacts
+	if trimmedResult == "" || trimmedResult == "Anomaly on cluster  of severity  and type " {
+		// Generate a minimal fallback description
+		result = fmt.Sprintf("Anomaly on cluster %s of severity %s and type %s in %s name %s on namespace %s, alert description: %s",
+			safeData.SafeClusterName(),
+			safeData.SafeSeverity(),
+			safeData.SafeType(),
+			safeData.SafeResourceType(),
+			safeData.SafeResource(),
+			safeData.SafeNamespace(),
+			safeData.SafeDescription(),
+		)
+	}
+	// log.Printf("result: %+v\n", result)
+	return result, nil
 }
 
 // Agent represents the main agent that observes and learns from the cluster
@@ -691,9 +782,17 @@ func (a *Agent) DetectAnomalies() ([]types.Anomaly, error) {
 				log.Printf("Failed to format anomaly for encoding: %v", err)
 				continue
 			}
+
+			// Validate that the formatted text is not empty or whitespace-only
+			if strings.TrimSpace(text) == "" {
+				log.Printf("Skipping embedding for anomaly with empty formatted text: %+v", anomaly)
+				continue
+			}
+
 			vector, err := a.model.Encode(text)
 			if err != nil {
-				log.Printf("Failed to generate embedding for anomaly: %v", err)
+				log.Printf("Failed to generate embedding for anomaly: %v (text length: %d, text: '%.200s')",
+					err, len(text), text)
 				continue
 			}
 
