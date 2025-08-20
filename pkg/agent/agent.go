@@ -346,6 +346,7 @@ func (a *Agent) ObserveClusterWithContext(ctx context.Context) error {
 	var nodes []types.Node
 	var resources = make(map[string]types.ResourceList)
 	var events []types.ClusterEvent
+	var pvs []types.PersistentVolume
 
 	// Collect namespaces (always needed for resource organization)
 	nsList, err := a.k8sClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
@@ -417,9 +418,28 @@ func (a *Agent) ObserveClusterWithContext(ctx context.Context) error {
 			}
 		}
 
+		// Collect persistent volume claims if configured
+		if a.shouldCollectResource("persistentvolumeclaims") {
+			pvcs, err := a.collectPVCs(ctx, ns.Name)
+			if err != nil {
+				log.Printf("Warning: failed to collect PVCs in namespace %s: %v", ns.Name, err)
+			} else if len(pvcs) > 0 {
+				resourceList.PersistentVolumeClaims = pvcs
+			}
+		}
+
 		// Only add namespace to resources if we collected any data
 		if len(resourceList.Pods) > 0 || len(resourceList.Services) > 0 || len(resourceList.Deployments) > 0 {
 			resources[ns.Name] = resourceList
+		}
+	}
+
+	// After per-namespace collection, collect cluster-scoped PVs if configured
+	if a.shouldCollectResource("persistentvolumes") {
+		var err error
+		pvs, err = a.collectPVs(ctx)
+		if err != nil {
+			log.Printf("Warning: failed to collect PVs: %v", err)
 		}
 	}
 
@@ -458,12 +478,13 @@ func (a *Agent) ObserveClusterWithContext(ctx context.Context) error {
 	}
 
 	a.state = types.ClusterState{
-		ClusterID:   clusterID,
-		ClusterName: clusterName,
-		Namespaces:  nsNames,
-		Nodes:       nodes,
-		Resources:   resources,
-		Events:      events,
+		ClusterID:         clusterID,
+		ClusterName:       clusterName,
+		Namespaces:        nsNames,
+		Nodes:             nodes,
+		Resources:         resources,
+		Events:            events,
+		PersistentVolumes: pvs,
 	}
 	return nil
 }
@@ -685,13 +706,109 @@ func (a *Agent) collectDeployments(ctx context.Context, namespace string) ([]typ
 	return deployments, nil
 }
 
+// collectPVCs collects PersistentVolumeClaims for a specific namespace
+func (a *Agent) collectPVCs(ctx context.Context, namespace string) ([]types.PersistentVolumeClaim, error) {
+	pvcList, err := a.k8sClient.CoreV1().PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list PVCs in namespace %s: %v", namespace, err)
+	}
+
+	pvcs := make([]types.PersistentVolumeClaim, 0, len(pvcList.Items))
+	for _, pvc := range pvcList.Items {
+		storageClass := ""
+		if pvc.Spec.StorageClassName != nil {
+			storageClass = *pvc.Spec.StorageClassName
+		}
+		// Access modes
+		accessModes := make([]string, 0, len(pvc.Spec.AccessModes))
+		for _, m := range pvc.Spec.AccessModes {
+			accessModes = append(accessModes, string(m))
+		}
+		// Requested storage
+		requested := ""
+		if qty, ok := pvc.Spec.Resources.Requests[v1.ResourceStorage]; ok {
+			requested = qty.String()
+		}
+
+		pvcs = append(pvcs, types.PersistentVolumeClaim{
+			Name:             pvc.Name,
+			Namespace:        pvc.Namespace,
+			Status:           string(pvc.Status.Phase),
+			VolumeName:       pvc.Spec.VolumeName,
+			StorageClassName: storageClass,
+			AccessModes:      accessModes,
+			RequestedStorage: requested,
+		})
+	}
+
+	return pvcs, nil
+}
+
+// collectPVs collects PersistentVolumes cluster-wide
+func (a *Agent) collectPVs(ctx context.Context) ([]types.PersistentVolume, error) {
+	pvList, err := a.k8sClient.CoreV1().PersistentVolumes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list PVs: %v", err)
+	}
+
+	pvs := make([]types.PersistentVolume, 0, len(pvList.Items))
+	for _, pv := range pvList.Items {
+		// Capacity
+		capacity := ""
+		if qty, ok := pv.Spec.Capacity[v1.ResourceStorage]; ok {
+			capacity = qty.String()
+		}
+		// Access modes
+		accessModes := make([]string, 0, len(pv.Spec.AccessModes))
+		for _, m := range pv.Spec.AccessModes {
+			accessModes = append(accessModes, string(m))
+		}
+		// Volume mode
+		volumeMode := ""
+		if pv.Spec.VolumeMode != nil {
+			volumeMode = string(*pv.Spec.VolumeMode)
+		}
+		// Claim ref
+		claimNamespace := ""
+		claimName := ""
+		if pv.Spec.ClaimRef != nil {
+			claimNamespace = pv.Spec.ClaimRef.Namespace
+			claimName = pv.Spec.ClaimRef.Name
+		}
+
+		pvs = append(pvs, types.PersistentVolume{
+			Name:             pv.Name,
+			Status:           string(pv.Status.Phase),
+			Capacity:         capacity,
+			StorageClassName: pv.Spec.StorageClassName,
+			AccessModes:      accessModes,
+			ReclaimPolicy:    string(pv.Spec.PersistentVolumeReclaimPolicy),
+			VolumeMode:       volumeMode,
+			ClaimNamespace:   claimNamespace,
+			ClaimName:        claimName,
+		})
+	}
+
+	return pvs, nil
+}
+
 // shouldCollectResource checks if a resource type should be collected based on configuration
 func (a *Agent) shouldCollectResource(resourceType string) bool {
 	if len(a.config.Clusters) == 0 {
 		return false
 	}
+	// Normalize desired type and provide aliases
+	wanted := strings.ToLower(resourceType)
 	for _, resource := range a.config.Clusters[0].Resources {
-		if resource == resourceType {
+		r := strings.ToLower(resource)
+		if r == wanted {
+			return true
+		}
+		// Aliases for PVs and PVCs
+		if wanted == "persistentvolumes" && (r == "pv" || r == "persistentvolume" || r == "persistentvolumes") {
+			return true
+		}
+		if wanted == "persistentvolumeclaims" && (r == "pvc" || r == "persistentvolumeclaim" || r == "persistentvolumeclaims") {
 			return true
 		}
 	}

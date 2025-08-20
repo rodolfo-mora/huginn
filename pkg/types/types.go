@@ -12,6 +12,8 @@ type ClusterState struct {
 	Nodes       []Node
 	Resources   map[string]ResourceList
 	Events      []ClusterEvent // Cluster-wide events
+	// Cluster-scoped resources
+	PersistentVolumes []PersistentVolume
 }
 
 // MultiClusterState represents the aggregated state of multiple clusters
@@ -50,6 +52,8 @@ type ResourceList struct {
 	Pods        []Pod
 	Services    []Service
 	Deployments []Deployment
+	// Namespace-scoped storage resources
+	PersistentVolumeClaims []PersistentVolumeClaim
 }
 
 // Pod represents a Kubernetes pod
@@ -71,6 +75,30 @@ type Service struct {
 type Deployment struct {
 	Name     string
 	Replicas int32
+}
+
+// PersistentVolumeClaim represents a Kubernetes PVC
+type PersistentVolumeClaim struct {
+	Name             string
+	Namespace        string
+	Status           string
+	VolumeName       string
+	StorageClassName string
+	AccessModes      []string
+	RequestedStorage string
+}
+
+// PersistentVolume represents a Kubernetes PV
+type PersistentVolume struct {
+	Name             string
+	Status           string
+	Capacity         string
+	StorageClassName string
+	AccessModes      []string
+	ReclaimPolicy    string
+	VolumeMode       string
+	ClaimNamespace   string
+	ClaimName        string
 }
 
 // Anomaly represents a detected anomaly in the cluster
