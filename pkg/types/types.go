@@ -149,7 +149,7 @@ type AlertmanagerAlert struct {
 
 // AlertmanagerPayload represents the payload sent to Alertmanager
 type AlertmanagerPayload struct {
-	Alerts []AlertmanagerAlert // `json:"alerts"`
+	Alerts []AlertmanagerAlert `json:"alerts"`
 }
 
 // ClusterEvent represents a Kubernetes cluster event
