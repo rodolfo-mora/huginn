@@ -187,7 +187,7 @@ func (c *QdrantClient) StoreAlert(vector []float32, anomaly types.Anomaly) error
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Qdrant API returned status code %d: %s", resp.StatusCode, string(body))
+		return fmt.Errorf("qdrant api returned status code %d: %s", resp.StatusCode, string(body))
 	}
 
 	return nil
@@ -224,7 +224,7 @@ func (c *QdrantClient) SearchSimilarAlerts(vector []float32, limit int) ([]types
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("Qdrant API returned status code %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("qdrant api returned status code %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Decode response
