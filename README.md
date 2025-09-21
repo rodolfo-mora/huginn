@@ -1,5 +1,7 @@
 # Huginn
 
+<p align="center"><img src="img/huginn.png" alt="Huginn" width="400"></p>
+
 Huginn is an intelligent Kubernetes monitoring agent that uses reinforcement learning to detect and respond to anomalies in your clusters. It supports monitoring multiple Kubernetes clusters simultaneously.
 
 ## Authors

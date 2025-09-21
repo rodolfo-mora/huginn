@@ -15,6 +15,8 @@ graph TB
         PODS[Pods]
         SERVICES[Services]
         DEPLOYMENTS[Deployments]
+        PVCS[PVCs]
+        PVS[PVs]
     end
 
     subgraph "External Services"
@@ -40,7 +42,9 @@ graph TB
     %% Main Application
     subgraph "Huginn Application"
         MAIN[main.go]
-        AGENT[Agent]
+        MULTI[Multi-Cluster Agent]
+        CLUSTERMGR[Cluster Manager]
+        AGENT[Per-Cluster Agent]
         CONFIG[Configuration]
         OBSERVE[ObserveCluster]
         ANOMALY[Anomaly Detector]
@@ -63,6 +67,8 @@ graph TB
     PODS --> OBSERVE
     SERVICES --> OBSERVE
     DEPLOYMENTS --> OBSERVE
+    PVCS --> OBSERVE
+    PVS --> OBSERVE
     
     OBSERVE --> AGENT
     AGENT --> ANOMALY
@@ -86,7 +92,11 @@ graph TB
     PROM --> GRAFANA
     ALERTMANAGER --> GRAFANA
     
-    CONFIG --> AGENT
+    CONFIG --> MULTI
+    MULTI --> CLUSTERMGR
+    MULTI --> AGENT
+    CLUSTERMGR <--> AGENT
+    MULTI --> METRICS
 
     %% RAG CLI connections
     RAG_CLI --> RAG_EMBEDDING
@@ -100,14 +110,16 @@ graph TB
 
 ### Core Components
 
-1. **Agent** - Main orchestrator coordinating all activities
-2. **Configuration** - YAML-based configuration management with comprehensive defaults
-3. **Cluster Observer** - Collects real-time Kubernetes data with configurable resource types
-4. **Anomaly Detector** - Identifies abnormal patterns using configurable EWMA smoothing and statistical analysis
-5. **Embedding Models** - Converts anomalies to vectors (Simple, OpenAI, Ollama, Sentence Transformers)
-6. **Storage Interface** - Manages alert and vector storage (Qdrant, Redis)
-7. **Notification System** - Distributes alerts to multiple channels (Slack, Email, Webhook, Alertmanager)
-8. **Prometheus Exporter** - Exports metrics for monitoring with resource-based metric creation
+1. **Multi-Cluster Agent** - Coordinates multiple per-cluster agents, aggregates results, shares metrics exporter
+2. **Cluster Manager** - Tracks per-cluster state and health, provides multi-cluster summaries
+3. **Per-Cluster Agent** - Orchestrates observation, learning, detection for a single cluster
+4. **Configuration** - YAML-based configuration management with comprehensive defaults
+5. **Cluster Observer** - Collects real-time Kubernetes data with configurable resource types
+6. **Anomaly Detector** - Identifies abnormal patterns using configurable EWMA smoothing and statistical analysis
+7. **Embedding Models** - Converts anomalies to vectors (Simple, OpenAI, Ollama, Sentence Transformers)
+8. **Storage Interface** - Manages alert and vector storage (Qdrant, Redis)
+9. **Notification System** - Distributes alerts to multiple channels (Slack, Email, Webhook, Alertmanager)
+10. **Prometheus Exporter** - Exports metrics for monitoring with resource-based metric creation
 
 ### New Features
 
@@ -116,6 +128,8 @@ graph TB
 - **Pods**: Status, restart counts, node assignment
 - **Services**: Type and configuration
 - **Deployments**: Replica counts and status
+- **PersistentVolumeClaims (PVCs)**: Status, storage class, requested capacity
+- **PersistentVolumes (PVs)**: Status, capacity, class, claim binding
 - **Events**: Cluster events with severity, reason, and message analysis
 - **Namespace Mapping**: Always collects namespace information for nodes regardless of pod monitoring
 
@@ -129,6 +143,7 @@ graph TB
 #### 3. **Command Line Interface**
 - **Print Control Flags**: `-print-anomalies` and `-print-state` flags for output control
 - **Configuration Flag**: `-config` for custom configuration files
+- **Configuration Preview**: `-print-config` to dump the effective configuration (includes defaults)
 - **Signal Handling**: Graceful shutdown with SIGINT/SIGTERM
 
 #### 4. **RAG CLI Tool**
@@ -143,16 +158,17 @@ graph TB
 The anomaly detection uses Exponential Weighted Moving Average (EWMA) with configurable alpha values:
 - **Higher alpha (0.5-0.8)**: Faster reaction to changes, more sensitive to anomalies
 - **Lower alpha (0.1-0.3)**: Slower reaction, more smoothing, less noise
-- **Default alpha (0.3)**: Balanced approach for most monitoring scenarios
-- **Current config (0.015)**: Very conservative smoothing for noisy environments
+- **Default alpha (0.3)**: Balanced approach for most monitoring scenarios (applied if not set)
+- Note: You can override per metric via `cpuAlpha`, `memoryAlpha`, and `restartAlpha`.
 
 ### Statistical Analysis Configuration
 
-The system includes configurable parameters for statistical analysis:
-- **minStdDev**: Minimum standard deviation required for statistical analysis (default: 1.0%, config: 10.0%)
-- **Minimum history**: Requires 5 observations before statistical analysis
-- **EWMA deviation**: Minimum 5% deviation from trend to trigger anomaly
-- **Z-score threshold**: 3.0 for statistical outliers
+The detector uses conservative, history-aware checks:
+- **minStdDev**: Minimum standard deviation required for statistical analysis (default: 1.0)
+- **Minimum history**: Nodes require 5 observations; pod restarts require 3
+- **Z-score condition**: z-score > 4 AND value > 80% of threshold
+- **Absolute condition**: value > threshold
+- **EWMA deviation condition**: |value − EWMA| > max(3×stddev, 5.0) AND value > 70% of threshold
 
 ### Data Flow
 
@@ -166,18 +182,23 @@ The system includes configurable parameters for statistical analysis:
 
 ## Configuration
 
-### Kubernetes Configuration
+### Multi-Cluster Configuration
 ```yaml
-kubernetes:
-  kubeconfig: "/path/to/kubeconfig"
-  context: "cluster-context"
-  namespace: ""
-  resources:
-    - nodes      # Always enabled for namespace mapping
-    - pods       # Optional
-    - services   # Optional
-    - deployments # Optional
-    - events     # Optional - cluster events collection
+observationInterval: 30
+clusters:
+  - name: "production"
+    id: "prod-cluster-1"
+    kubeconfig: "/path/to/prod-kubeconfig"
+    context: "prod-context"
+    namespace: ""
+    resources:
+      - nodes
+      - events
+      - pods
+      - services
+      # - persistentvolumeclaims
+      # - persistentvolumes
+    enabled: true
 ```
 
 ### Anomaly Detection Configuration
@@ -190,7 +211,7 @@ anomalyDetection:
   cpuAlpha: 0.015        # EWMA smoothing factor
   memoryAlpha: 0.015     # EWMA smoothing factor
   restartAlpha: 0.015    # EWMA smoothing factor
-  minStdDev: 10.0        # Minimum standard deviation
+  minStdDev: 1.0         # Minimum standard deviation used in stats
 ```
 
 ### Embedding Configuration
@@ -208,6 +229,18 @@ embedding:
     model: all-MiniLM-L6-v2
     device: cpu
 ```
+
+### Formatting Configuration
+```yaml
+formatting:
+  # Console display (Go template). Safe accessors are available in code.
+  anomalyDisplayTemplate: "Cluster {{.ClusterName}} [{{.Severity}}] {{.Type}} in {{.ResourceType}} resource {{.Resource}} in namespace {{.Namespace}}: {{.Description}}\n"
+
+  # Single-line encoding template for vector storage
+  anomalyEncodingTemplate: "Anomaly detected of type {{.Type}} in {{.ResourceType}} resource {{.Resource}} in namespace {{.Namespace}} in cluster {{.ClusterName}}: {{.Description}}"
+```
+
+Supported safe accessors: `.SafeClusterName`, `.SafeSeverity`, `.SafeType`, `.SafeResourceType`, `.SafeResource`, `.SafeNamespace`, `.SafeNodeName`, `.HasNodeName`. Template funcs: `default`, `nonEmpty`.
 
 ### Storage Configuration
 ```yaml
@@ -228,7 +261,7 @@ notification:
   type: alertmanager     # slack, email, webhook, alertmanager
   minSeverity: warning
   alertmanager:
-    url: http://localhost:9093/api/v2/alerts
+    url: http://localhost:9093/api/v1/alerts   # v1 endpoint expected (returns 200)
     labels:
       app: huginn
       severity: warning
@@ -276,6 +309,8 @@ Huginn integrates with a complete monitoring stack:
 - **If `nodes` is enabled**: All node metrics (CPU, memory, capacity, statistics) are created
 - **If `pods` is enabled**: All pod metrics (restart counts, statistics) are created
 - **Always enabled metrics**: Anomaly detection metrics and historical data
+
+Note: The multi-cluster agent exposes a single metrics server on `:8080` aggregating data across clusters.
 
 ## RAG CLI Tool
 
