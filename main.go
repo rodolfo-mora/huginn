@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/rodgon/valkyrie/pkg/agent"
-	"github.com/rodgon/valkyrie/pkg/config"
+	"github.com/rodolfo-mora/huginn/pkg/agent"
+	"github.com/rodolfo-mora/huginn/pkg/config"
 )
 
 func main() {

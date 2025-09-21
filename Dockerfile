@@ -17,7 +17,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o valkyrie ./main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o huginn ./main.go
 
 # Final stage
 FROM alpine:3.19
@@ -29,7 +29,7 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/valkyrie .
+COPY --from=builder /app/huginn .
 
 # Copy configuration and scripts
 COPY config.yaml /app/config.yaml
@@ -40,11 +40,11 @@ RUN chmod +x /app/scripts/setup_qdrant.sh
 ENV TZ=UTC
 
 # Run as non-root user
-RUN adduser -D -g '' valkyrie
-USER valkyrie
+RUN adduser -D -g '' huginn
+USER huginn
 
 # Expose port if needed (adjust as necessary)
 # EXPOSE 8080
 
 # Set entrypoint
-ENTRYPOINT ["/app/valkyrie"] 
+ENTRYPOINT ["/app/huginn"]

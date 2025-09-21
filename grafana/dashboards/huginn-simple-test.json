@@ -1,8 +1,8 @@
 {
   "dashboard": {
     "id": null,
-    "title": "Valkyrie Simple Test",
-    "tags": ["valkyrie", "test"],
+    "title": "Huginn Simple Test",
+    "tags": ["huginn", "test"],
     "style": "dark",
     "timezone": "browser",
     "panels": [
@@ -12,7 +12,7 @@
         "type": "graph",
         "targets": [
           {
-            "expr": "valkyrie_node_cpu_usage_percent",
+            "expr": "huginn_node_cpu_usage_percent",
             "legendFormat": "{{node}}"
           }
         ],
@@ -29,7 +29,7 @@
         "type": "stat",
         "targets": [
           {
-            "expr": "increase(valkyrie_anomaly_detected_total[1h])",
+            "expr": "increase(huginn_anomaly_detected_total[1h])",
             "legendFormat": "{{type}}"
           }
         ],

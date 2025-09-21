@@ -3,7 +3,7 @@ package storage
 import (
 	"time"
 
-	"github.com/rodgon/valkyrie/pkg/types"
+	"github.com/rodolfo-mora/huginn/pkg/types"
 )
 
 // Storage defines the interface for alert storage

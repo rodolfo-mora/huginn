@@ -1,121 +1,121 @@
 groups:
-  - name: valkyrie_alerts
+  - name: huginn_alerts
     rules:
       # High CPU Usage Alert (using correct percentage)
       - alert: HighCPUUsage
-        expr: valkyrie_node_cpu_usage_percent > 80
+        expr: huginn_node_cpu_usage_percent > 80
         for: 2m
         labels:
           severity: warning
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "High CPU usage detected on {{ $labels.node }}"
           description: "Node {{ $labels.node }} has high CPU usage: {{ $value }}%"
 
       # Critical CPU Usage Alert (using correct percentage)
       - alert: CriticalCPUUsage
-        expr: valkyrie_node_cpu_usage_percent > 90
+        expr: huginn_node_cpu_usage_percent > 90
         for: 1m
         labels:
           severity: critical
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "Critical CPU usage detected on {{ $labels.node }}"
           description: "Node {{ $labels.node }} has critical CPU usage: {{ $value }}%"
 
       # High Memory Usage Alert (using correct percentage)
       - alert: HighMemoryUsage
-        expr: valkyrie_node_memory_usage_percent > 80
+        expr: huginn_node_memory_usage_percent > 80
         for: 2m
         labels:
           severity: warning
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "High memory usage detected on {{ $labels.node }}"
           description: "Node {{ $labels.node }} has high memory usage: {{ $value }}%"
 
       # Critical Memory Usage Alert (using correct percentage)
       - alert: CriticalMemoryUsage
-        expr: valkyrie_node_memory_usage_percent > 90
+        expr: huginn_node_memory_usage_percent > 90
         for: 1m
         labels:
           severity: critical
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "Critical memory usage detected on {{ $labels.node }}"
           description: "Node {{ $labels.node }} has critical memory usage: {{ $value }}%"
 
       # High Pod Restart Alert
       - alert: HighPodRestarts
-        expr: valkyrie_pod_restart_count > 5
+        expr: huginn_pod_restart_count > 5
         for: 5m
         labels:
           severity: warning
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "High restart count detected for pod {{ $labels.pod }}"
           description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times"
 
       # Critical Pod Restart Alert
       - alert: CriticalPodRestarts
-        expr: valkyrie_pod_restart_count > 10
+        expr: huginn_pod_restart_count > 10
         for: 2m
         labels:
           severity: critical
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "Critical restart count detected for pod {{ $labels.pod }}"
           description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted {{ $value }} times"
 
       # Anomaly Detection Alert
       - alert: AnomalyDetected
-        expr: increase(valkyrie_anomaly_detected_total[5m]) > 0
+        expr: increase(huginn_anomaly_detected_total[5m]) > 0
         labels:
           severity: warning
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "Anomaly detected in cluster"
           description: "{{ $value }} anomalies detected in the last 5 minutes"
 
       # High Anomaly Rate Alert
       - alert: HighAnomalyRate
-        expr: rate(valkyrie_anomaly_detected_total[5m]) > 0.1
+        expr: rate(huginn_anomaly_detected_total[5m]) > 0.1
         labels:
           severity: critical
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "High anomaly rate detected"
           description: "Anomaly rate is {{ $value }} per second over the last 5 minutes"
 
       # CPU Deviation Alert (using correct percentage)
       - alert: CPUDeviationFromMean
-        expr: (valkyrie_node_cpu_usage_percent / valkyrie_node_cpu_mean_percent) > 2
+        expr: (huginn_node_cpu_usage_percent / huginn_node_cpu_mean_percent) > 2
         for: 2m
         labels:
           severity: warning
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "CPU usage significantly above mean on {{ $labels.node }}"
           description: "CPU usage is {{ $value }}x the historical mean on {{ $labels.node }}"
 
       # Memory Deviation Alert (using correct percentage)
       - alert: MemoryDeviationFromMean
-        expr: (valkyrie_node_memory_usage_percent / valkyrie_node_memory_mean_percent) > 2
+        expr: (huginn_node_memory_usage_percent / huginn_node_memory_mean_percent) > 2
         for: 2m
         labels:
           severity: warning
-          service: valkyrie
+          service: huginn
         annotations:
           summary: "Memory usage significantly above mean on {{ $labels.node }}"
           description: "Memory usage is {{ $value }}x the historical mean on {{ $labels.node }}"
 
-      # Service Down Alert (if Valkyrie metrics stop coming)
-      - alert: ValkyrieMetricsDown
-        expr: up{job="valkyrie"} == 0
+      # Service Down Alert (if Huginn metrics stop coming)
+      - alert: HuginnMetricsDown
+        expr: up{job="huginn"} == 0
         for: 1m
         labels:
           severity: critical
-          service: valkyrie
+          service: huginn
         annotations:
-          summary: "Valkyrie metrics endpoint is down"
-          description: "Valkyrie metrics endpoint has been down for more than 1 minute" 
+          summary: "Huginn metrics endpoint is down"
+          description: "Huginn metrics endpoint has been down for more than 1 minute"

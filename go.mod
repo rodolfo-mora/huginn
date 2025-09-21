@@ -1,4 +1,4 @@
-module github.com/rodgon/valkyrie
+module github.com/rodolfo-mora/huginn
 
 go 1.22
 

@@ -1,6 +1,6 @@
-# Valkyrie
+# Huginn
 
-Valkyrie is an intelligent Kubernetes monitoring agent that uses reinforcement learning to detect and respond to anomalies in your clusters. It supports monitoring multiple Kubernetes clusters simultaneously.
+Huginn is an intelligent Kubernetes monitoring agent that uses reinforcement learning to detect and respond to anomalies in your clusters. It supports monitoring multiple Kubernetes clusters simultaneously.
 
 ## Authors
 
@@ -21,7 +21,7 @@ Valkyrie is an intelligent Kubernetes monitoring agent that uses reinforcement l
 
 ## Configuration
 
-Valkyrie is configured using a YAML file. Here's an example configuration for multiple clusters:
+Huginn is configured using a YAML file. Here's an example configuration for multiple clusters:
 
 ```yaml
 # Multi-cluster configuration
@@ -80,14 +80,14 @@ storage:
   storeAlerts: true
   qdrant:
     url: http://localhost:6333
-    collection: valkyrie-anomalies
+    collection: huginn-anomalies
     vectorSize: 384
     distanceMetric: cosine
   redis:
     url: localhost:6379
     password: ""
     db: 0
-    keyPrefix: "valkyrie:"
+    keyPrefix: "huginn:"
 
 # Notification configuration (shared across all clusters)
 notification:
@@ -97,7 +97,7 @@ notification:
   slack:
     webhookUrl: ""
     channel: "#alerts"
-    username: "Valkyrie"
+    username: "Huginn"
   email:
     smtpHost: ""
     smtpPort: 587
@@ -112,7 +112,7 @@ notification:
   alertmanager:
     url: http://localhost:9093
     defaultLabels:
-      service: valkyrie
+      service: huginn
       component: anomaly-detection
 
 # Anomaly detection configuration (applies to all clusters)
@@ -156,14 +156,14 @@ Each cluster in the `clusters` array can have the following configuration:
 
 ### Backward Compatibility
 
-For single-cluster deployments, Valkyrie will automatically create a default cluster configuration if no clusters are specified in the config file.
+For single-cluster deployments, Huginn will automatically create a default cluster configuration if no clusters are specified in the config file.
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/rodgon/valkyrie.git
-cd valkyrie
+git clone https://github.com/rodolfo-mora/huginn.git
+cd huginn
 ```
 
 2. Install dependencies:
@@ -173,26 +173,26 @@ go mod download
 
 3. Build the binary:
 ```bash
-go build -o valkyrie
+go build -o huginn
 ```
 
 ## Usage
 
 1. Create a configuration file (e.g., `config.yaml`) with your cluster settings.
 
-2. Run Valkyrie:
+2. Run Huginn:
 ```bash
-./valkyrie -config config.yaml
+./huginn -config config.yaml
 ```
 
 3. For debugging, you can print cluster state and anomalies:
 ```bash
-./valkyrie -config config.yaml -print-state -print-anomalies
+./huginn -config config.yaml -print-state -print-anomalies
 ```
 
 ## Multi-Cluster Architecture
 
-Valkyrie uses a multi-agent architecture where:
+Huginn uses a multi-agent architecture where:
 
 - **MultiClusterAgent**: Orchestrates multiple cluster agents
 - **ClusterManager**: Manages cluster health and state
@@ -214,7 +214,7 @@ Each cluster is monitored independently, but anomalies and observations are aggr
 ### Building
 
 ```bash
-go build -o valkyrie
+go build -o huginn
 ```
 
 ### Testing
@@ -225,7 +225,7 @@ go test ./...
 
 ### Contributors
 
-We welcome contributions! If you'd like to contribute to Valkyrie, please:
+We welcome contributions! If you'd like to contribute to Huginn, please:
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)

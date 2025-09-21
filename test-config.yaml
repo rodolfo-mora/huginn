@@ -4,7 +4,7 @@ observationInterval: 60
 clusters:
   - name: "test"
     id: "test-cluster"
-    kubeconfig: "/Users/rodgon/.kube/config"
+    kubeconfig: "~/.kube/config"
     context: ""
     namespace: ""
     resources:
@@ -38,7 +38,7 @@ notification:
   alertmanager:
     url: "http://localhost:9093"
     defaultLabels:
-      service: "valkyrie"
+      service: "huginn"
       component: "anomaly-detection"
 
 # Formatting configuration using Go templates

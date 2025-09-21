@@ -1,8 +1,8 @@
 {
   "dashboard": {
     "id": null,
-    "title": "Valkyrie Anomaly Detection",
-    "tags": ["valkyrie", "anomaly-detection"],
+    "title": "Huginn Anomaly Detection",
+    "tags": ["huginn", "anomaly-detection"],
     "style": "dark",
     "timezone": "browser",
     "panels": [
@@ -12,7 +12,7 @@
         "type": "graph",
         "targets": [
           {
-            "expr": "valkyrie_node_cpu_usage_percent",
+            "expr": "huginn_node_cpu_usage_percent",
             "legendFormat": "{{node}}"
           }
         ],
@@ -29,7 +29,7 @@
         "type": "graph",
         "targets": [
           {
-            "expr": "valkyrie_node_memory_usage_percent",
+            "expr": "huginn_node_memory_usage_percent",
             "legendFormat": "{{node}}"
           }
         ],
@@ -46,7 +46,7 @@
         "type": "stat",
         "targets": [
           {
-            "expr": "increase(valkyrie_anomaly_detected_total[1h])",
+            "expr": "increase(huginn_anomaly_detected_total[1h])",
             "legendFormat": "{{type}} - {{resource}}"
           }
         ],
@@ -63,7 +63,7 @@
         "type": "table",
         "targets": [
           {
-            "expr": "valkyrie_pod_restart_count",
+            "expr": "huginn_pod_restart_count",
             "format": "table"
           }
         ],
@@ -80,11 +80,11 @@
         "type": "graph",
         "targets": [
           {
-            "expr": "valkyrie_node_cpu_mean_percent",
+            "expr": "huginn_node_cpu_mean_percent",
             "legendFormat": "{{node}} - Mean"
           },
           {
-            "expr": "valkyrie_node_cpu_ewma_percent",
+            "expr": "huginn_node_cpu_ewma_percent",
             "legendFormat": "{{node}} - EWMA"
           }
         ],

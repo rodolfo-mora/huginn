@@ -5,9 +5,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/rodgon/valkyrie/pkg/anomaly"
-	"github.com/rodgon/valkyrie/pkg/config"
-	"github.com/rodgon/valkyrie/pkg/types"
+	"github.com/rodolfo-mora/huginn/pkg/anomaly"
+	"github.com/rodolfo-mora/huginn/pkg/config"
+	"github.com/rodolfo-mora/huginn/pkg/types"
 )
 
 // PrometheusExporter exposes anomaly detection metrics to Prometheus
@@ -64,7 +64,7 @@ func NewPrometheusExporter(detector *anomaly.Detector, cfg *config.Config) *Prom
 	// Always create anomaly detection metrics
 	exporter.anomalyDetected = promauto.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "valkyrie_anomaly_detected_total",
+			Name: "huginn_anomaly_detected_total",
 			Help: "Total number of anomalies detected",
 		},
 		[]string{"type", "resource", "namespace", "severity"},
@@ -72,7 +72,7 @@ func NewPrometheusExporter(detector *anomaly.Detector, cfg *config.Config) *Prom
 
 	exporter.anomalySeverity = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_anomaly_severity_score",
+			Name: "huginn_anomaly_severity_score",
 			Help: "Severity score of detected anomalies (1=low, 2=medium, 3=high)",
 		},
 		[]string{"type", "resource", "namespace"},
@@ -80,7 +80,7 @@ func NewPrometheusExporter(detector *anomaly.Detector, cfg *config.Config) *Prom
 
 	exporter.metricHistory = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_metric_history",
+			Name: "huginn_metric_history",
 			Help: "Historical metric values for analysis",
 		},
 		[]string{"resource_type", "resource_id", "metric_type"},
@@ -104,7 +104,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 	// Current metrics - Raw values
 	e.nodeCPURaw = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_cpu_raw",
+			Name: "huginn_node_cpu_raw",
 			Help: "Raw CPU usage for each node",
 		},
 		[]string{"node"},
@@ -112,7 +112,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 
 	e.nodeMemoryRaw = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_memory_raw",
+			Name: "huginn_node_memory_raw",
 			Help: "Raw memory usage for each node",
 		},
 		[]string{"node"},
@@ -121,7 +121,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 	// Current metrics - Percentages
 	e.nodeCPUUsage = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_cpu_usage_percent",
+			Name: "huginn_node_cpu_usage_percent",
 			Help: "Current CPU usage percentage for each node",
 		},
 		[]string{"node"},
@@ -129,7 +129,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 
 	e.nodeMemoryUsage = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_memory_usage_percent",
+			Name: "huginn_node_memory_usage_percent",
 			Help: "Current memory usage percentage for each node",
 		},
 		[]string{"node"},
@@ -138,7 +138,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 	// Node capacity metrics
 	e.nodeCPUCapacity = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_cpu_capacity",
+			Name: "huginn_node_cpu_capacity",
 			Help: "CPU capacity for each node",
 		},
 		[]string{"node"},
@@ -146,7 +146,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 
 	e.nodeMemoryCapacity = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_memory_capacity",
+			Name: "huginn_node_memory_capacity",
 			Help: "Memory capacity for each node",
 		},
 		[]string{"node"},
@@ -155,7 +155,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 	// Statistical measures
 	e.nodeCPUMean = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_cpu_mean_percent",
+			Name: "huginn_node_cpu_mean_percent",
 			Help: "Mean CPU usage percentage for each node",
 		},
 		[]string{"node"},
@@ -163,7 +163,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 
 	e.nodeCPUStdDev = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_cpu_stddev_percent",
+			Name: "huginn_node_cpu_stddev_percent",
 			Help: "Standard deviation of CPU usage for each node",
 		},
 		[]string{"node"},
@@ -171,7 +171,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 
 	e.nodeCPUEWMA = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_cpu_ewma_percent",
+			Name: "huginn_node_cpu_ewma_percent",
 			Help: "Exponentially weighted moving average of CPU usage for each node",
 		},
 		[]string{"node"},
@@ -179,7 +179,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 
 	e.nodeMemoryMean = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_memory_mean_percent",
+			Name: "huginn_node_memory_mean_percent",
 			Help: "Mean memory usage percentage for each node",
 		},
 		[]string{"node"},
@@ -187,7 +187,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 
 	e.nodeMemoryStdDev = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_memory_stddev_percent",
+			Name: "huginn_node_memory_stddev_percent",
 			Help: "Standard deviation of memory usage for each node",
 		},
 		[]string{"node"},
@@ -195,7 +195,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 
 	e.nodeMemoryEWMA = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_node_memory_ewma_percent",
+			Name: "huginn_node_memory_ewma_percent",
 			Help: "Exponentially weighted moving average of memory usage for each node",
 		},
 		[]string{"node"},
@@ -206,7 +206,7 @@ func (e *PrometheusExporter) createNodeMetrics() {
 func (e *PrometheusExporter) createPodMetrics() {
 	e.podRestartCount = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_pod_restart_count",
+			Name: "huginn_pod_restart_count",
 			Help: "Current restart count for each pod",
 		},
 		[]string{"pod", "namespace"},
@@ -214,7 +214,7 @@ func (e *PrometheusExporter) createPodMetrics() {
 
 	e.podRestartMean = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_pod_restart_mean",
+			Name: "huginn_pod_restart_mean",
 			Help: "Mean restart count for each pod",
 		},
 		[]string{"pod", "namespace"},
@@ -222,7 +222,7 @@ func (e *PrometheusExporter) createPodMetrics() {
 
 	e.podRestartStdDev = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_pod_restart_stddev",
+			Name: "huginn_pod_restart_stddev",
 			Help: "Standard deviation of restart count for each pod",
 		},
 		[]string{"pod", "namespace"},
@@ -230,7 +230,7 @@ func (e *PrometheusExporter) createPodMetrics() {
 
 	e.podRestartEWMA = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "valkyrie_pod_restart_ewma",
+			Name: "huginn_pod_restart_ewma",
 			Help: "Exponentially weighted moving average of restart count for each pod",
 		},
 		[]string{"pod", "namespace"},

@@ -219,7 +219,7 @@ func setDefaults(config *Config) {
 
 	// Redis defaults
 	if config.Storage.Redis.KeyPrefix == "" {
-		config.Storage.Redis.KeyPrefix = "valkyrie:"
+		config.Storage.Redis.KeyPrefix = "huginn:"
 	}
 
 	// Anomaly detection defaults

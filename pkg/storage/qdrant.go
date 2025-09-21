@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rodgon/valkyrie/pkg/types"
+	"github.com/rodolfo-mora/huginn/pkg/types"
 )
 
 // QdrantClient implements the Storage interface using Qdrant

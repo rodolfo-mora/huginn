@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rodgon/valkyrie/pkg/types"
+	"github.com/rodolfo-mora/huginn/pkg/types"
 )
 
 // Detector implements anomaly detection for Kubernetes resources

@@ -3,7 +3,7 @@ package notification
 import (
 	"time"
 
-	"github.com/rodgon/valkyrie/pkg/types"
+	"github.com/rodolfo-mora/huginn/pkg/types"
 )
 
 // NotificationConfig represents the configuration for notifications

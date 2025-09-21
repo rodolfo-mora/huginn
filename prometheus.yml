@@ -12,7 +12,7 @@ alerting:
 rule_files:
   # - "first_rules.yml"
   # - "second_rules.yml"
-  - "valkyrie_alerts.yml"
+  - "huginn_alerts.yml"
 
 scrape_configs:
   # Prometheus itself
@@ -20,8 +20,8 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # Valkyrie anomaly detection metrics
-  - job_name: 'valkyrie'
+  # Huginn anomaly detection metrics
+  - job_name: 'huginn'
     static_configs:
       - targets: ['host.docker.internal:8080']  # Use host.docker.internal to access localhost from container
     metrics_path: '/metrics'

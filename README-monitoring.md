@@ -1,6 +1,6 @@
-# Valkyrie Monitoring Setup
+# Huginn Monitoring Setup
 
-This directory contains a complete monitoring stack for the Valkyrie anomaly detection system using Prometheus, Alertmanager, and Grafana.
+This directory contains a complete monitoring stack for the Huginn anomaly detection system using Prometheus, Alertmanager, and Grafana.
 
 ## Quick Start
 
@@ -9,7 +9,7 @@ This directory contains a complete monitoring stack for the Valkyrie anomaly det
    docker-compose up -d
    ```
 
-2. **Start your Valkyrie application** (make sure it's running on localhost:8080):
+2. **Start your Huginn application** (make sure it's running on localhost:8080):
    ```go
    agent.StartMetricsServer() // This starts the metrics server on :8080
    ```
@@ -22,7 +22,7 @@ This directory contains a complete monitoring stack for the Valkyrie anomaly det
 ## Configuration
 
 ### Prometheus Configuration (`prometheus.yml`)
-- Scrapes metrics from `host.docker.internal:8080` (your Valkyrie app)
+- Scrapes metrics from `host.docker.internal:8080` (your Huginn app)
 - 30-second scrape interval
 - 200-hour data retention
 - Integrated with Alertmanager for alerting
@@ -36,8 +36,8 @@ This directory contains a complete monitoring stack for the Valkyrie anomaly det
 - **If `deployments` is enabled**: Deployment metrics are created (future enhancement)
 
 **Always enabled metrics**:
-- Anomaly detection metrics (`valkyrie_anomaly_detected_total`, `valkyrie_anomaly_severity_score`)
-- Historical data metrics (`valkyrie_metric_history`)
+- Anomaly detection metrics (`huginn_anomaly_detected_total`, `huginn_anomaly_severity_score`)
+- Historical data metrics (`huginn_metric_history`)
 
 This ensures efficient resource usage and prevents unnecessary metric collection.
 
@@ -47,43 +47,43 @@ This ensures efficient resource usage and prevents unnecessary metric collection
 - Alert grouping and inhibition rules
 - 5-minute resolve timeout
 
-### Alerting Rules (`valkyrie_alerts.yml`)
+### Alerting Rules (`huginn_alerts.yml`)
 - **High/Critical CPU Usage**: >80% (warning), >90% (critical)
 - **High/Critical Memory Usage**: >80% (warning), >90% (critical)
 - **High/Critical Pod Restarts**: >5 (warning), >10 (critical)
 - **Anomaly Detection**: Any anomaly detected
 - **High Anomaly Rate**: >0.1 anomalies/second
 - **Deviation from Mean**: >2x historical mean
-- **Service Down**: Valkyrie metrics endpoint unavailable
+- **Service Down**: Huginn metrics endpoint unavailable
 
 ### Grafana Configuration
 - **Datasource**: Automatically configured to connect to Prometheus
-- **Dashboard**: Pre-configured dashboard for Valkyrie metrics
+- **Dashboard**: Pre-configured dashboard for Huginn metrics
 - **Credentials**: admin/admin
 
 ## Available Metrics
 
 ### Node Metrics
-- `valkyrie_node_cpu_raw` - Raw CPU usage per node (in cores, e.g., 1.5)
-- `valkyrie_node_memory_raw` - Raw memory usage per node (in bytes)
-- `valkyrie_node_cpu_capacity` - Total CPU capacity per node (in cores)
-- `valkyrie_node_memory_capacity` - Total memory capacity per node (in bytes)
-- `valkyrie_node_cpu_usage_percent` - Current CPU usage percentage per node (0-100)
-- `valkyrie_node_memory_usage_percent` - Current memory usage percentage per node (0-100)
-- `valkyrie_node_cpu_mean_percent` - Mean CPU usage percentage per node
-- `valkyrie_node_cpu_stddev_percent` - Standard deviation of CPU usage per node
-- `valkyrie_node_cpu_ewma_percent` - EWMA of CPU usage per node
+- `huginn_node_cpu_raw` - Raw CPU usage per node (in cores, e.g., 1.5)
+- `huginn_node_memory_raw` - Raw memory usage per node (in bytes)
+- `huginn_node_cpu_capacity` - Total CPU capacity per node (in cores)
+- `huginn_node_memory_capacity` - Total memory capacity per node (in bytes)
+- `huginn_node_cpu_usage_percent` - Current CPU usage percentage per node (0-100)
+- `huginn_node_memory_usage_percent` - Current memory usage percentage per node (0-100)
+- `huginn_node_cpu_mean_percent` - Mean CPU usage percentage per node
+- `huginn_node_cpu_stddev_percent` - Standard deviation of CPU usage per node
+- `huginn_node_cpu_ewma_percent` - EWMA of CPU usage per node
 - Similar metrics for memory
 
 ### Pod Metrics
-- `valkyrie_pod_restart_count` - Current restart count per pod
-- `valkyrie_pod_restart_mean` - Mean restart count per pod
-- `valkyrie_pod_restart_stddev` - Standard deviation of restart count per pod
-- `valkyrie_pod_restart_ewma` - EWMA of restart count per pod
+- `huginn_pod_restart_count` - Current restart count per pod
+- `huginn_pod_restart_mean` - Mean restart count per pod
+- `huginn_pod_restart_stddev` - Standard deviation of restart count per pod
+- `huginn_pod_restart_ewma` - EWMA of restart count per pod
 
 ### Anomaly Detection
-- `valkyrie_anomaly_detected_total` - Counter of detected anomalies
-- `valkyrie_anomaly_severity_score` - Severity score of anomalies
+- `huginn_anomaly_detected_total` - Counter of detected anomalies
+- `huginn_anomaly_severity_score` - Severity score of anomalies
 
 ## Alerting
 
@@ -101,7 +101,7 @@ This ensures efficient resource usage and prevents unnecessary metric collection
    - Critical restart thresholds
 
 3. **Anomaly Detection Alerts**
-   - Any anomaly detected by Valkyrie
+   - Any anomaly detected by Huginn
    - High anomaly rates indicating system issues
 
 4. **Statistical Deviation Alerts**
@@ -109,7 +109,7 @@ This ensures efficient resource usage and prevents unnecessary metric collection
    - Indicates unusual behavior patterns
 
 5. **Service Health Alerts**
-   - Valkyrie metrics endpoint availability
+   - Huginn metrics endpoint availability
    - Ensures monitoring system health
 
 ### Configuring Notifications
@@ -137,7 +137,7 @@ receivers:
     slack_configs:
       - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
         channel: '#alerts'
-        title: 'Valkyrie Alert'
+        title: 'Huginn Alert'
         text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
 ```
 
@@ -145,55 +145,55 @@ receivers:
 
 ```promql
 # Get current CPU usage percentage for all nodes
-valkyrie_node_cpu_usage_percent
+huginn_node_cpu_usage_percent
 
 # Get current memory usage percentage for all nodes
-valkyrie_node_memory_usage_percent
+huginn_node_memory_usage_percent
 
 # Get raw CPU usage in cores
-valkyrie_node_cpu_raw
+huginn_node_cpu_raw
 
 # Get raw memory usage in bytes
-valkyrie_node_memory_raw
+huginn_node_memory_raw
 
 # Get node capacity information
-valkyrie_node_cpu_capacity
-valkyrie_node_memory_capacity
+huginn_node_cpu_capacity
+huginn_node_memory_capacity
 
 # Calculate actual usage vs capacity ratio
-valkyrie_node_cpu_raw / valkyrie_node_cpu_capacity * 100
+huginn_node_cpu_raw / huginn_node_cpu_capacity * 100
 
 # Get anomalies detected in the last hour
-increase(valkyrie_anomaly_detected_total[1h])
+increase(huginn_anomaly_detected_total[1h])
 
 # Get nodes with high CPU usage (>80%)
-valkyrie_node_cpu_usage_percent > 80
+huginn_node_cpu_usage_percent > 80
 
 # Compare current vs mean CPU usage
-valkyrie_node_cpu_usage_percent / valkyrie_node_cpu_mean_percent
+huginn_node_cpu_usage_percent / huginn_node_cpu_mean_percent
 
 # Get pods with high restart counts
-valkyrie_pod_restart_count > 5
+huginn_pod_restart_count > 5
 
 # Get active alerts
 ALERTS{alertstate="firing"}
 
 # Get nodes with memory usage above 90%
-valkyrie_node_memory_usage_percent > 90
+huginn_node_memory_usage_percent > 90
 
 # Calculate memory usage in GB
-valkyrie_node_memory_raw / 1024 / 1024 / 1024
+huginn_node_memory_raw / 1024 / 1024 / 1024
 
 # Calculate CPU usage in millicores
-valkyrie_node_cpu_raw * 1000
+huginn_node_cpu_raw * 1000
 ```
 
 ## Dashboard Features
 
 The pre-configured Grafana dashboards include:
 
-### Valkyrie Comprehensive Monitoring Dashboard
-A comprehensive dashboard (`valkyrie-comprehensive-dashboard.json`) that displays all metrics from the Prometheus exporter:
+### Huginn Comprehensive Monitoring Dashboard
+A comprehensive dashboard (`huginn-comprehensive-dashboard.json`) that displays all metrics from the Prometheus exporter:
 
 #### Node Metrics Section:
 - **CPU Usage (%)** - Real-time CPU usage percentage graphs with thresholds
@@ -220,8 +220,8 @@ A comprehensive dashboard (`valkyrie-comprehensive-dashboard.json`) that display
 - **Auto-refresh** - Dashboard refreshes every 30 seconds
 - **Threshold Alerts** - Color-coded thresholds for quick visual identification
 
-### Valkyrie Basic Dashboard
-A simpler dashboard (`valkyrie-dashboard.json`) with essential metrics for quick overview.
+### Huginn Basic Dashboard
+A simpler dashboard (`huginn-dashboard.json`) with essential metrics for quick overview.
 
 ### Dashboard Configuration
 - **Time Range**: Default 1 hour, adjustable
@@ -232,7 +232,7 @@ A simpler dashboard (`valkyrie-dashboard.json`) with essential metrics for quick
 ## Troubleshooting
 
 ### Prometheus can't scrape metrics
-1. Ensure your Valkyrie application is running on localhost:8080
+1. Ensure your Huginn application is running on localhost:8080
 2. Check that the metrics server is started: `agent.StartMetricsServer()`
 3. Verify the `/metrics` endpoint is accessible: `curl http://localhost:8080/metrics`
 
@@ -247,14 +247,14 @@ A simpler dashboard (`valkyrie-dashboard.json`) with essential metrics for quick
 3. Verify the datasource configuration in Grafana
 
 ### No metrics appearing
-1. Check that your Valkyrie application is calling `DetectAnomalies()` regularly
+1. Check that your Huginn application is calling `DetectAnomalies()` regularly
 2. Verify the Prometheus targets page: http://localhost:9190/targets
 3. Check the Prometheus logs: `docker-compose logs prometheus`
 
 ### Alerts not firing
 1. Check alert rules are loaded: http://localhost:9190/rules
 2. Verify metrics are being collected
-3. Check alert expressions in `valkyrie_alerts.yml`
+3. Check alert expressions in `huginn_alerts.yml`
 
 ## Stopping the Stack
 

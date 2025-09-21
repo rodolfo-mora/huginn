@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/rodgon/valkyrie/pkg/types"
+	"github.com/rodolfo-mora/huginn/pkg/types"
 )
 
 // SlackNotifier implements notification via Slack
@@ -135,7 +135,7 @@ func (n *AlertmanagerNotifier) Notify(anomaly types.Anomaly) error {
 		Annotations:  annotations,
 		StartsAt:     anomaly.Timestamp,
 		EndsAt:       time.Now().Add(24 * time.Hour), // Alerts expire after 24 hours
-		GeneratorURL: "https://github.com/rodgon/valkyrie",
+		GeneratorURL: "https://github.com/rodolfo-mora/huginn",
 	}
 
 	// payload := types.AlertmanagerPayload{

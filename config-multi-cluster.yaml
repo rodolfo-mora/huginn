@@ -82,14 +82,14 @@ storage:
   storeAlerts: true
   qdrant:
     url: "http://localhost:6333"
-    collection: "valkyrie-anomalies"
+    collection: "huginn-anomalies"
     vectorSize: 384
     distanceMetric: "cosine"
   redis:
     url: "localhost:6379"
     password: ""
     db: 0
-    keyPrefix: "valkyrie:"
+    keyPrefix: "huginn:"
 
 # Embedding configuration (shared across all clusters)
 embedding:
@@ -107,7 +107,7 @@ notification:
   alertmanager:
     url: "http://localhost:9093"
     defaultLabels:
-      service: "valkyrie"
+      service: "huginn"
       component: "anomaly-detection"
       
 # Formatting configuration using Go templates

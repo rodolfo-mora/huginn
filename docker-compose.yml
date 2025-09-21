@@ -3,7 +3,7 @@
 services:
   prometheus:
     image: prom/prometheus:latest
-    container_name: valkyrie-prometheus
+    container_name: huginn-prometheus
     ports:
       - "9190:9090"
     volumes:
@@ -20,11 +20,11 @@ services:
       - '--web.external-url=http://localhost:9190'
     restart: unless-stopped
     networks:
-      - valkyrie-network
+      - huginn-network
 
   alertmanager:
     image: prom/alertmanager:latest
-    container_name: valkyrie-alertmanager
+    container_name: huginn-alertmanager
     ports:
       - "9093:9093"
     volumes:
@@ -36,11 +36,11 @@ services:
       - '--web.external-url=http://localhost:9093'
     restart: unless-stopped
     networks:
-      - valkyrie-network
+      - huginn-network
 
   grafana:
     image: grafana/grafana:12.0.2
-    container_name: valkyrie-grafana
+    container_name: huginn-grafana
     ports:
       - "3000:3000"
     environment:
@@ -53,14 +53,14 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards
     restart: unless-stopped
     networks:
-      - valkyrie-network
+      - huginn-network
     depends_on:
       - prometheus
       - alertmanager
 
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: valkyrie-qdrant
+    container_name: huginn-qdrant
     ports:
       - "6333:6333"  # HTTP API
       - "6334:6334"  # gRPC API
@@ -71,7 +71,7 @@ services:
       - QDRANT__SERVICE__GRPC_PORT=6334
     restart: unless-stopped
     networks:
-      - valkyrie-network
+      - huginn-network
 
 volumes:
   prometheus_data:
@@ -80,5 +80,5 @@ volumes:
   qdrant_data:
 
 networks:
-  valkyrie-network:
+  huginn-network:
     driver: bridge 

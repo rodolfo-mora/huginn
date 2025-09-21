@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rodgon/valkyrie/pkg/anomaly"
-	"github.com/rodgon/valkyrie/pkg/cluster"
-	"github.com/rodgon/valkyrie/pkg/config"
-	"github.com/rodgon/valkyrie/pkg/embedding"
-	"github.com/rodgon/valkyrie/pkg/metrics"
-	"github.com/rodgon/valkyrie/pkg/notification"
-	"github.com/rodgon/valkyrie/pkg/storage"
-	"github.com/rodgon/valkyrie/pkg/types"
+	"github.com/rodolfo-mora/huginn/pkg/anomaly"
+	"github.com/rodolfo-mora/huginn/pkg/cluster"
+	"github.com/rodolfo-mora/huginn/pkg/config"
+	"github.com/rodolfo-mora/huginn/pkg/embedding"
+	"github.com/rodolfo-mora/huginn/pkg/metrics"
+	"github.com/rodolfo-mora/huginn/pkg/notification"
+	"github.com/rodolfo-mora/huginn/pkg/storage"
+	"github.com/rodolfo-mora/huginn/pkg/types"
 )
 
 // MultiClusterAgent orchestrates multiple cluster agents

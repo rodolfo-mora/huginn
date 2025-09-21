@@ -1,7 +1,7 @@
 global:
   resolve_timeout: 5m
   smtp_smarthost: 'localhost:587'
-  smtp_from: 'alertmanager@valkyrie.local'
+  smtp_from: 'alertmanager@huginn.local'
 
 route:
   group_by: ['alertname', 'cluster', 'service']
@@ -23,7 +23,7 @@ receivers:
 
   - name: 'email-notifications'
     email_configs:
-      - to: 'team-valkyrie@example.com'
+      - to: 'team-huginn@example.com'
         send_resolved: true
 
 inhibit_rules:

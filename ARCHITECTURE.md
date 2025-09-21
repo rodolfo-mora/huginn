@@ -1,8 +1,8 @@
-# Valkyrie Architecture
+# Huginn Architecture
 
 ## System Overview
 
-Valkyrie is an intelligent Kubernetes monitoring agent that uses reinforcement learning and anomaly detection to monitor cluster health and respond to issues. It provides comprehensive monitoring with configurable resource collection, statistical anomaly detection, and integration with modern AI/ML tools.
+Huginn is an intelligent Kubernetes monitoring agent that uses reinforcement learning and anomaly detection to monitor cluster health and respond to issues. It provides comprehensive monitoring with configurable resource collection, statistical anomaly detection, and integration with modern AI/ML tools.
 
 ## Architecture Diagram
 
@@ -38,7 +38,7 @@ graph TB
     end
 
     %% Main Application
-    subgraph "Valkyrie Application"
+    subgraph "Huginn Application"
         MAIN[main.go]
         AGENT[Agent]
         CONFIG[Configuration]
@@ -230,7 +230,7 @@ notification:
   alertmanager:
     url: http://localhost:9093/api/v2/alerts
     labels:
-      app: valkyrie
+      app: huginn
       severity: warning
 ```
 
@@ -238,14 +238,14 @@ notification:
 
 ### Local Development
 ```bash
-go build -o valkyrie
-./valkyrie -config config.yaml -print-anomalies -print-state
+go build -o huginn
+./huginn -config config.yaml -print-anomalies -print-state
 ```
 
 ### Docker Deployment
 ```bash
-docker build -t valkyrie .
-docker run -v $(pwd)/config.yaml:/app/config.yaml valkyrie
+docker build -t huginn .
+docker run -v $(pwd)/config.yaml:/app/config.yaml huginn
 ```
 
 ### Kubernetes Deployment
@@ -255,14 +255,14 @@ docker run -v $(pwd)/config.yaml:/app/config.yaml valkyrie
 
 ## Monitoring Stack Integration
 
-Valkyrie integrates with a complete monitoring stack:
+Huginn integrates with a complete monitoring stack:
 - **Prometheus**: Metrics collection and storage (port 9190)
 - **Grafana**: Visualization and dashboards (port 3000)
 - **Alertmanager**: Alert routing and management (port 9093)
 - **Qdrant**: Vector database for anomaly storage (port 6333)
 
 ### Service Ports
-- **Valkyrie Metrics**: `:8080`
+- **Huginn Metrics**: `:8080`
 - **Prometheus**: `:9190`
 - **Alertmanager**: `:9093`
 - **Grafana**: `:3000`

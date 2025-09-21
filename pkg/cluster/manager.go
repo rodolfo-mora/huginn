@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rodgon/valkyrie/pkg/config"
-	"github.com/rodgon/valkyrie/pkg/types"
+	"github.com/rodolfo-mora/huginn/pkg/config"
+	"github.com/rodolfo-mora/huginn/pkg/types"
 )
 
 // Manager handles multiple cluster operations
