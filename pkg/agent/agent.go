@@ -369,40 +369,31 @@ func (a *Agent) ObserveClusterWithContext(ctx context.Context) error {
 	// This is always done regardless of pod monitoring configuration
 	nodeNamespaces := make(map[string]map[string]bool) // node -> set of namespaces
 
-	// Always collect minimal pod information for node mapping
+	// Always collect pod information once per namespace and reuse for:
+	// 1) nodeNamespaces mapping, 2) resource population when pods are enabled
 	for _, ns := range nsList.Items {
-		// Get pods for node mapping (minimal collection)
-		podList, err := a.k8sClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{})
+		// Fetch pods using the shared collector
+		pods, _, err := a.collectPods(ctx, ns.Name)
 		if err != nil {
 			log.Printf("Warning: failed to list pods in namespace %s: %v", ns.Name, err)
-			continue
-		}
-
-		// Build node-to-namespaces mapping from pods
-		for _, pod := range podList.Items {
-			if pod.Spec.NodeName != "" {
-				if nodeNamespaces[pod.Spec.NodeName] == nil {
-					nodeNamespaces[pod.Spec.NodeName] = make(map[string]bool)
+			// Continue with other resources even if pods listing fails
+		} else {
+			// Build node-to-namespaces mapping from collected pods
+			for _, p := range pods {
+				if p.NodeName != "" {
+					if nodeNamespaces[p.NodeName] == nil {
+						nodeNamespaces[p.NodeName] = make(map[string]bool)
+					}
+					nodeNamespaces[p.NodeName][ns.Name] = true
 				}
-				nodeNamespaces[pod.Spec.NodeName][ns.Name] = true
 			}
 		}
 
 		// Collect full resource data per namespace if configured
 		resourceList := types.ResourceList{}
 
-		// Collect pods if configured (reuse already fetched podList to avoid duplicate API calls)
-		if a.shouldCollectResource("pods") {
-			pods := make([]types.Pod, 0, len(podList.Items))
-			for _, pod := range podList.Items {
-				pods = append(pods, types.Pod{
-					Name:         pod.Name,
-					Namespace:    pod.Namespace,
-					NodeName:     pod.Spec.NodeName,
-					Status:       string(pod.Status.Phase),
-					RestartCount: getPodRestartCount(&pod),
-				})
-			}
+		// Populate pods if configured (reuse collected pods)
+		if a.shouldCollectResource("pods") && err == nil {
 			resourceList.Pods = pods
 		}
 
