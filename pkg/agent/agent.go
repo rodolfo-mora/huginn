@@ -21,6 +21,7 @@ import (
 	"github.com/rodolfo-mora/huginn/pkg/storage"
 	"github.com/rodolfo-mora/huginn/pkg/types"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	metricsapi "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsv "k8s.io/metrics/pkg/client/clientset/versioned"
@@ -648,12 +649,93 @@ func (a *Agent) collectPods(ctx context.Context, namespace string) ([]types.Pod,
 
 	for _, pod := range podList.Items {
 		nodeName := pod.Spec.NodeName
+
+		// Aggregate effective requests/limits for the pod
+		// For regular containers: sum of requests/limits
+		// For init containers: max across init containers
+		var sumCPUReq resource.Quantity
+		var sumCPULim resource.Quantity
+		var sumMemReq resource.Quantity
+		var sumMemLim resource.Quantity
+
+		// Initialize to zero quantities
+		sumCPUReq = resource.MustParse("0")
+		sumCPULim = resource.MustParse("0")
+		sumMemReq = resource.MustParse("0")
+		sumMemLim = resource.MustParse("0")
+
+		for _, c := range pod.Spec.Containers {
+			if q, ok := c.Resources.Requests[v1.ResourceCPU]; ok {
+				sumCPUReq.Add(q)
+			}
+			if q, ok := c.Resources.Limits[v1.ResourceCPU]; ok {
+				sumCPULim.Add(q)
+			}
+			if q, ok := c.Resources.Requests[v1.ResourceMemory]; ok {
+				sumMemReq.Add(q)
+			}
+			if q, ok := c.Resources.Limits[v1.ResourceMemory]; ok {
+				sumMemLim.Add(q)
+			}
+		}
+
+		// Init containers: take max
+		var maxCPUReq resource.Quantity = resource.MustParse("0")
+		var maxCPULim resource.Quantity = resource.MustParse("0")
+		var maxMemReq resource.Quantity = resource.MustParse("0")
+		var maxMemLim resource.Quantity = resource.MustParse("0")
+
+		for _, ic := range pod.Spec.InitContainers {
+			if q, ok := ic.Resources.Requests[v1.ResourceCPU]; ok {
+				if q.Cmp(maxCPUReq) > 0 {
+					maxCPUReq = q.DeepCopy()
+				}
+			}
+			if q, ok := ic.Resources.Limits[v1.ResourceCPU]; ok {
+				if q.Cmp(maxCPULim) > 0 {
+					maxCPULim = q.DeepCopy()
+				}
+			}
+			if q, ok := ic.Resources.Requests[v1.ResourceMemory]; ok {
+				if q.Cmp(maxMemReq) > 0 {
+					maxMemReq = q.DeepCopy()
+				}
+			}
+			if q, ok := ic.Resources.Limits[v1.ResourceMemory]; ok {
+				if q.Cmp(maxMemLim) > 0 {
+					maxMemLim = q.DeepCopy()
+				}
+			}
+		}
+
+		// Effective pod-level resources are sum of app containers OR max of init containers, whichever is larger
+		effCPUReq := sumCPUReq.DeepCopy()
+		if maxCPUReq.Cmp(effCPUReq) > 0 {
+			effCPUReq = maxCPUReq.DeepCopy()
+		}
+		effCPULim := sumCPULim.DeepCopy()
+		if maxCPULim.Cmp(effCPULim) > 0 {
+			effCPULim = maxCPULim.DeepCopy()
+		}
+		effMemReq := sumMemReq.DeepCopy()
+		if maxMemReq.Cmp(effMemReq) > 0 {
+			effMemReq = maxMemReq.DeepCopy()
+		}
+		effMemLim := sumMemLim.DeepCopy()
+		if maxMemLim.Cmp(effMemLim) > 0 {
+			effMemLim = maxMemLim.DeepCopy()
+		}
+
 		pods = append(pods, types.Pod{
-			Name:         pod.Name,
-			Namespace:    pod.Namespace,
-			NodeName:     nodeName,
-			Status:       string(pod.Status.Phase),
-			RestartCount: getPodRestartCount(&pod),
+			Name:           pod.Name,
+			Namespace:      pod.Namespace,
+			NodeName:       nodeName,
+			Status:         string(pod.Status.Phase),
+			RestartCount:   getPodRestartCount(&pod),
+			CPURequests:    effCPUReq.String(),
+			CPULimits:      effCPULim.String(),
+			MemoryRequests: effMemReq.String(),
+			MemoryLimits:   effMemLim.String(),
 		})
 
 		// Store the node name for this pod

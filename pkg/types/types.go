@@ -58,11 +58,15 @@ type ResourceList struct {
 
 // Pod represents a Kubernetes pod
 type Pod struct {
-	Name         string
-	Namespace    string
-	NodeName     string // Name of the Kubernetes node where this pod is running
-	Status       string
-	RestartCount int32
+	Name           string
+	Namespace      string
+	NodeName       string // Name of the Kubernetes node where this pod is running
+	Status         string
+	RestartCount   int32
+	CPURequests    string // Effective CPU requests for the pod
+	CPULimits      string // Effective CPU limits for the pod
+	MemoryRequests string // Effective memory requests for the pod
+	MemoryLimits   string // Effective memory limits for the pod
 }
 
 // Service represents a Kubernetes service
