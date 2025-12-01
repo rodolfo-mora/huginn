@@ -731,6 +731,7 @@ func (a *Agent) collectPods(ctx context.Context, namespace string) ([]types.Pod,
 			Namespace:      pod.Namespace,
 			NodeName:       nodeName,
 			Status:         string(pod.Status.Phase),
+			State:          getPodOverallStatus(&pod),
 			RestartCount:   getPodRestartCount(&pod),
 			CPURequests:    effCPUReq.String(),
 			CPULimits:      effCPULim.String(),
@@ -923,6 +924,106 @@ func getPodRestartCount(pod *v1.Pod) int32 {
 		restarts += cs.RestartCount
 	}
 	return restarts
+}
+
+// getPodOverallStatus derives a single summary status for a pod similar to kubectl output.
+func getPodOverallStatus(pod *v1.Pod) string {
+	if pod == nil {
+		return "Unknown"
+	}
+
+	// Pods marked for deletion report as terminating (unless lost).
+	if pod.DeletionTimestamp != nil {
+		if pod.Status.Reason == "NodeLost" {
+			return "Unknown"
+		}
+		return "Terminating"
+	}
+
+	reason := pod.Status.Reason
+	if reason == "" {
+		reason = string(pod.Status.Phase)
+	}
+	if reason == "" {
+		reason = "Unknown"
+	}
+
+	initStatuses := pod.Status.InitContainerStatuses
+	for i := range initStatuses {
+		cs := initStatuses[i]
+		state := cs.State
+
+		switch {
+		case state.Terminated != nil:
+			if state.Terminated.ExitCode == 0 {
+				continue
+			}
+			if state.Terminated.Reason != "" {
+				return "Init:" + state.Terminated.Reason
+			}
+			if state.Terminated.Signal != 0 {
+				return fmt.Sprintf("Init:Signal:%d", state.Terminated.Signal)
+			}
+			return fmt.Sprintf("Init:ExitCode:%d", state.Terminated.ExitCode)
+		case state.Waiting != nil:
+			if state.Waiting.Reason != "" && state.Waiting.Reason != "PodInitializing" {
+				return "Init:" + state.Waiting.Reason
+			}
+			return fmt.Sprintf("Init:%d/%d", i, len(initStatuses))
+		default:
+			// Not yet running or waiting, report progress.
+			return fmt.Sprintf("Init:%d/%d", i, len(initStatuses))
+		}
+	}
+
+	containerStatuses := pod.Status.ContainerStatuses
+	if len(containerStatuses) == 0 {
+		return reason
+	}
+
+	allReady := len(containerStatuses) > 0
+	for _, cs := range containerStatuses {
+		switch {
+		case cs.State.Waiting != nil && cs.State.Waiting.Reason != "":
+			return cs.State.Waiting.Reason
+		case cs.State.Terminated != nil:
+			if cs.State.Terminated.Reason != "" {
+				return cs.State.Terminated.Reason
+			}
+			if cs.State.Terminated.Signal != 0 {
+				return fmt.Sprintf("Signal:%d", cs.State.Terminated.Signal)
+			}
+			return fmt.Sprintf("ExitCode:%d", cs.State.Terminated.ExitCode)
+		}
+
+		if !cs.Ready {
+			allReady = false
+		}
+	}
+
+	if reason == string(v1.PodRunning) {
+		if allReady {
+			return "Running"
+		}
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == v1.PodReady {
+				if cond.Status == v1.ConditionTrue {
+					return "Running"
+				}
+				if cond.Reason != "" {
+					return cond.Reason
+				}
+				return "NotReady"
+			}
+		}
+		return "NotReady"
+	}
+
+	if reason == "Completed" && pod.Status.Phase != v1.PodSucceeded {
+		return string(pod.Status.Phase)
+	}
+
+	return reason
 }
 
 // func (a *Agent) PrintHistory() {

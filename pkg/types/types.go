@@ -67,6 +67,7 @@ type Pod struct {
 	CPULimits      string // Effective CPU limits for the pod
 	MemoryRequests string // Effective memory requests for the pod
 	MemoryLimits   string // Effective memory limits for the pod
+	State          string // State of the pod
 }
 
 // Service represents a Kubernetes service
